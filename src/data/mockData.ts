@@ -1,0 +1,230 @@
+export type Department = 'Sales' | 'Customs & Compliance' | 'Logistics';
+export type EmployeeStatus = 'Active' | 'Inactive' | 'Onboarding';
+export type ContractType = 'Permanent' | 'Intern' | 'Freelance';
+export type ProvisioningStatus = 'Provisioned' | 'Pending' | 'Failed';
+export type JobStatus = 'Queued' | 'Running' | 'Completed' | 'Failed';
+
+export interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  personalEmail: string;
+  role: string;
+  department: Department;
+  startDate: string;
+  contractType: ContractType;
+  workPhone: string;
+  personalPhone: string;
+  status: EmployeeStatus;
+  provisioningStatus: ProvisioningStatus;
+  avatar?: string;
+  onboardingTasks: OnboardingTask[];
+  provisioningItems: ProvisioningItem[];
+}
+
+export interface OnboardingTask {
+  id: string;
+  key: string;
+  completed: boolean;
+  automated: boolean;
+  completedAt?: string;
+  departmentSpecific?: Department;
+}
+
+export interface ProvisioningItem {
+  id: string;
+  label: string;
+  completed: boolean;
+  timestamp?: string;
+  service: 'M365' | 'Apple';
+}
+
+export interface ProvisioningJob {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  service: 'M365' | 'Apple ID';
+  status: JobStatus;
+  triggeredAt: string;
+  completedAt?: string;
+  logs: { step: string; timestamp: string; status: 'done' | 'pending' | 'error' }[];
+}
+
+const createOnboardingTasks = (department: Department): OnboardingTask[] => {
+  const baseTasks: OnboardingTask[] = [
+    { id: '1', key: 'task.m365Created', completed: true, automated: true, completedAt: '2026-03-15 09:00' },
+    { id: '2', key: 'task.licenseAssigned', completed: true, automated: true, completedAt: '2026-03-15 09:01' },
+    { id: '3', key: 'task.emailConfigured', completed: true, automated: true, completedAt: '2026-03-15 09:02' },
+    { id: '4', key: 'task.sharedMailboxTrading', completed: true, automated: true, completedAt: '2026-03-15 09:03' },
+  ];
+
+  if (department === 'Sales') {
+    baseTasks.push({ id: '5s', key: 'task.sharedMailboxSales', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Sales' });
+  } else if (department === 'Customs & Compliance') {
+    baseTasks.push({ id: '5c', key: 'task.sharedMailboxCustoms', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Customs & Compliance' });
+  } else if (department === 'Logistics') {
+    baseTasks.push({ id: '5l', key: 'task.sharedMailboxTransport', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Logistics' });
+  }
+
+  baseTasks.push(
+    { id: '6', key: 'task.sharepointGroup', completed: true, automated: true, completedAt: '2026-03-15 09:04' },
+    { id: '7', key: 'task.appleBusinessManager', completed: true, automated: true, completedAt: '2026-03-15 09:05' },
+    { id: '8', key: 'task.loginPdf', completed: false, automated: false },
+    { id: '9', key: 'task.sliteInvite', completed: false, automated: false },
+    { id: '10', key: 'task.tribeCrmInvite', completed: false, automated: false },
+  );
+
+  return baseTasks;
+};
+
+const createProvisioningItems = (firstName: string): ProvisioningItem[] => [
+  { id: 'p1', label: 'Email created', completed: true, timestamp: '2026-03-15 09:00', service: 'M365' },
+  { id: 'p2', label: 'Business Premium licence assigned', completed: true, timestamp: '2026-03-15 09:01', service: 'M365' },
+  { id: 'p3', label: 'Shared mailboxes added', completed: true, timestamp: '2026-03-15 09:03', service: 'M365' },
+  { id: 'p4', label: 'SharePoint access granted', completed: true, timestamp: '2026-03-15 09:04', service: 'M365' },
+  { id: 'p5', label: 'Apple ID created', completed: true, timestamp: '2026-03-15 09:05', service: 'Apple' },
+];
+
+export const mockEmployees: Employee[] = [
+  {
+    id: 'emp-001', firstName: 'Sophie', lastName: 'de Vries', email: 'sophie@cores.nl',
+    personalEmail: 'sophie.devries@gmail.com', role: 'Sales Manager', department: 'Sales',
+    startDate: '2025-01-15', contractType: 'Permanent', workPhone: '+31 6 1234 5678',
+    personalPhone: '+31 6 8765 4321', status: 'Active', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Sales').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-01-15 10:00' })),
+    provisioningItems: createProvisioningItems('Sophie'),
+  },
+  {
+    id: 'emp-002', firstName: 'Jan', lastName: 'Bakker', email: 'jan@cores.nl',
+    personalEmail: 'jan.bakker@outlook.com', role: 'Customs Specialist', department: 'Customs & Compliance',
+    startDate: '2025-03-01', contractType: 'Permanent', workPhone: '+31 6 2345 6789',
+    personalPhone: '+31 6 9876 5432', status: 'Active', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Customs & Compliance').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-03-01 10:00' })),
+    provisioningItems: createProvisioningItems('Jan'),
+  },
+  {
+    id: 'emp-003', firstName: 'Emma', lastName: 'Jansen', email: 'emma@cores.nl',
+    personalEmail: 'emma.jansen@gmail.com', role: 'Logistics Coordinator', department: 'Logistics',
+    startDate: '2025-06-10', contractType: 'Permanent', workPhone: '+31 6 3456 7890',
+    personalPhone: '+31 6 0987 6543', status: 'Active', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Logistics').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-06-10 10:00' })),
+    provisioningItems: createProvisioningItems('Emma'),
+  },
+  {
+    id: 'emp-004', firstName: 'Daan', lastName: 'Visser', email: 'daan@cores.nl',
+    personalEmail: 'daan.visser@gmail.com', role: 'Sales Representative', department: 'Sales',
+    startDate: '2025-09-01', contractType: 'Permanent', workPhone: '+31 6 4567 8901',
+    personalPhone: '+31 6 1098 7654', status: 'Active', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Sales').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-09-01 10:00' })),
+    provisioningItems: createProvisioningItems('Daan'),
+  },
+  {
+    id: 'emp-005', firstName: 'Lisa', lastName: 'van den Berg', email: 'lisa@cores.nl',
+    personalEmail: 'lisa.vdberg@outlook.com', role: 'Compliance Officer', department: 'Customs & Compliance',
+    startDate: '2025-11-15', contractType: 'Permanent', workPhone: '+31 6 5678 9012',
+    personalPhone: '+31 6 2109 8765', status: 'Active', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Customs & Compliance').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-11-15 10:00' })),
+    provisioningItems: createProvisioningItems('Lisa'),
+  },
+  {
+    id: 'emp-006', firstName: 'Thomas', lastName: 'Mulder', email: 'thomas@cores.nl',
+    personalEmail: 'thomas.mulder@gmail.com', role: 'Warehouse Manager', department: 'Logistics',
+    startDate: '2026-01-10', contractType: 'Permanent', workPhone: '+31 6 6789 0123',
+    personalPhone: '+31 6 3210 9876', status: 'Active', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Logistics').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2026-01-10 10:00' })),
+    provisioningItems: createProvisioningItems('Thomas'),
+  },
+  {
+    id: 'emp-007', firstName: 'Fleur', lastName: 'Hendriks', email: 'fleur@cores.nl',
+    personalEmail: 'fleur.hendriks@gmail.com', role: 'Sales Intern', department: 'Sales',
+    startDate: '2026-03-01', contractType: 'Intern', workPhone: '+31 6 7890 1234',
+    personalPhone: '+31 6 4321 0987', status: 'Onboarding', provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Sales'),
+    provisioningItems: createProvisioningItems('Fleur'),
+  },
+  {
+    id: 'emp-008', firstName: 'Niels', lastName: 'de Groot', email: 'niels@cores.nl',
+    personalEmail: 'niels.degroot@outlook.com', role: 'Freight Forwarder', department: 'Logistics',
+    startDate: '2026-03-10', contractType: 'Permanent', workPhone: '+31 6 8901 2345',
+    personalPhone: '+31 6 5432 1098', status: 'Onboarding', provisioningStatus: 'Pending',
+    onboardingTasks: createOnboardingTasks('Logistics').map((t, i) => ({ ...t, completed: i < 4 })),
+    provisioningItems: createProvisioningItems('Niels').map((p, i) => ({ ...p, completed: i < 3 })),
+  },
+  {
+    id: 'emp-009', firstName: 'Mila', lastName: 'Smit', email: 'mila@cores.nl',
+    personalEmail: 'mila.smit@gmail.com', role: 'Customs Declarant', department: 'Customs & Compliance',
+    startDate: '2026-03-18', contractType: 'Permanent', workPhone: '', personalPhone: '+31 6 6543 2109',
+    status: 'Onboarding', provisioningStatus: 'Pending',
+    onboardingTasks: createOnboardingTasks('Customs & Compliance').map((t, i) => ({ ...t, completed: i < 2 })),
+    provisioningItems: createProvisioningItems('Mila').map((p, i) => ({ ...p, completed: i < 2 })),
+  },
+  {
+    id: 'emp-010', firstName: 'Bram', lastName: 'Willems', email: '', personalEmail: 'bram.willems@gmail.com',
+    role: 'Account Manager', department: 'Sales', startDate: '2024-05-01', contractType: 'Permanent',
+    workPhone: '+31 6 9012 3456', personalPhone: '+31 6 7654 3210', status: 'Inactive',
+    provisioningStatus: 'Provisioned',
+    onboardingTasks: createOnboardingTasks('Sales').map(t => ({ ...t, completed: true, completedAt: '2024-05-01 10:00' })),
+    provisioningItems: createProvisioningItems('Bram'),
+  },
+];
+
+export const mockProvisioningJobs: ProvisioningJob[] = [
+  {
+    id: 'pj-001', employeeId: 'emp-009', employeeName: 'Mila Smit', service: 'M365',
+    status: 'Running', triggeredAt: '2026-03-18 09:00',
+    logs: [
+      { step: 'Creating M365 account', timestamp: '2026-03-18 09:00:01', status: 'done' },
+      { step: 'Assigning Business Premium licence', timestamp: '2026-03-18 09:00:15', status: 'done' },
+      { step: 'Configuring email mila@cores.nl', timestamp: '2026-03-18 09:00:30', status: 'pending' },
+      { step: 'Adding to shared mailboxes', timestamp: '', status: 'pending' },
+      { step: 'Adding to SharePoint group', timestamp: '', status: 'pending' },
+    ],
+  },
+  {
+    id: 'pj-002', employeeId: 'emp-009', employeeName: 'Mila Smit', service: 'Apple ID',
+    status: 'Queued', triggeredAt: '2026-03-18 09:00',
+    logs: [
+      { step: 'Creating Apple Business Manager account', timestamp: '', status: 'pending' },
+    ],
+  },
+  {
+    id: 'pj-003', employeeId: 'emp-008', employeeName: 'Niels de Groot', service: 'M365',
+    status: 'Completed', triggeredAt: '2026-03-10 09:00', completedAt: '2026-03-10 09:05',
+    logs: [
+      { step: 'Creating M365 account', timestamp: '2026-03-10 09:00:01', status: 'done' },
+      { step: 'Assigning Business Premium licence', timestamp: '2026-03-10 09:00:15', status: 'done' },
+      { step: 'Configuring email niels@cores.nl', timestamp: '2026-03-10 09:00:30', status: 'done' },
+      { step: 'Adding to shared mailboxes', timestamp: '2026-03-10 09:01:00', status: 'done' },
+      { step: 'Adding to SharePoint group', timestamp: '2026-03-10 09:01:30', status: 'done' },
+    ],
+  },
+  {
+    id: 'pj-004', employeeId: 'emp-008', employeeName: 'Niels de Groot', service: 'Apple ID',
+    status: 'Failed', triggeredAt: '2026-03-10 09:00',
+    logs: [
+      { step: 'Creating Apple Business Manager account', timestamp: '2026-03-10 09:02:00', status: 'error' },
+    ],
+  },
+  {
+    id: 'pj-005', employeeId: 'emp-007', employeeName: 'Fleur Hendriks', service: 'M365',
+    status: 'Completed', triggeredAt: '2026-03-01 09:00', completedAt: '2026-03-01 09:04',
+    logs: [
+      { step: 'Creating M365 account', timestamp: '2026-03-01 09:00:01', status: 'done' },
+      { step: 'Assigning Business Premium licence', timestamp: '2026-03-01 09:00:15', status: 'done' },
+      { step: 'Configuring email fleur@cores.nl', timestamp: '2026-03-01 09:00:30', status: 'done' },
+      { step: 'Adding to shared mailboxes', timestamp: '2026-03-01 09:01:00', status: 'done' },
+      { step: 'Adding to SharePoint group', timestamp: '2026-03-01 09:01:30', status: 'done' },
+    ],
+  },
+  {
+    id: 'pj-006', employeeId: 'emp-007', employeeName: 'Fleur Hendriks', service: 'Apple ID',
+    status: 'Completed', triggeredAt: '2026-03-01 09:00', completedAt: '2026-03-01 09:03',
+    logs: [
+      { step: 'Creating Apple Business Manager account', timestamp: '2026-03-01 09:02:00', status: 'done' },
+    ],
+  },
+];
+
+export const departments: Department[] = ['Sales', 'Customs & Compliance', 'Logistics'];
+export const contractTypes: ContractType[] = ['Permanent', 'Intern', 'Freelance'];
