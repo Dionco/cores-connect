@@ -1,26 +1,60 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import { LanguageProvider } from "@/contexts/LanguageContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import AppLayout from "@/components/AppLayout";
+import LoginPage from "@/pages/LoginPage";
+import Dashboard from "@/pages/Dashboard";
+import EmployeesPage from "@/pages/EmployeesPage";
+import EmployeeProfile from "@/pages/EmployeeProfile";
+import OnboardingPage from "@/pages/OnboardingPage";
+import ProvisioningPage from "@/pages/ProvisioningPage";
+import SettingsPage from "@/pages/SettingsPage";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const AuthenticatedRoutes = () => {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return (
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/employees" element={<EmployeesPage />} />
+        <Route path="/employees/:id" element={<EmployeeProfile />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/provisioning" element={<ProvisioningPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AppLayout>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/*" element={<AuthenticatedRoutes />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </LanguageProvider>
   </QueryClientProvider>
 );
 
