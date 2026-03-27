@@ -1,12 +1,13 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees, mockProvisioningJobs } from '@/data/mockData';
+import { mockEmployees, mockProvisioningJobs, mockLeaveRequests, mockLeaveBalances } from '@/data/mockData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Users, ClipboardCheck, Zap, UserPlus } from 'lucide-react';
+import { Users, ClipboardCheck, Zap, UserPlus, CalendarDays, ArrowRight } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
-
+import { Badge } from '@/components/ui/badge';
 const Dashboard = () => {
   const { t } = useLanguage();
 
