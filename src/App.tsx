@@ -22,7 +22,9 @@ const AuthenticatedRoutes = () => {
   const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <LoginPage />
+    );
   }
 
   return (
