@@ -33,6 +33,7 @@ const AuthenticatedRoutes = () => {
         <Route path="/employees" element={<EmployeesPage />} />
         <Route path="/employees/:id" element={<EmployeeProfile />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/absence" element={<AbsencePage />} />
         <Route path="/provisioning" element={<ProvisioningPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />

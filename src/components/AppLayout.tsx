@@ -9,6 +9,7 @@ const navItems = [
   { key: 'nav.dashboard', path: '/dashboard', icon: LayoutDashboard },
   { key: 'nav.employees', path: '/employees', icon: Users },
   { key: 'nav.onboarding', path: '/onboarding', icon: ClipboardCheck },
+  { key: 'nav.absence', path: '/absence', icon: CalendarDays },
   { key: 'nav.provisioning', path: '/provisioning', icon: Zap },
   { key: 'nav.settings', path: '/settings', icon: Settings },
 ];
