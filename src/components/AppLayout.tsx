@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardCheck, Zap, Settings, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardCheck, Zap, Settings, Menu, X, LogOut, CalendarDays } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import coresLogo from '@/assets/cores-logo.png';
@@ -9,6 +9,7 @@ const navItems = [
   { key: 'nav.dashboard', path: '/dashboard', icon: LayoutDashboard },
   { key: 'nav.employees', path: '/employees', icon: Users },
   { key: 'nav.onboarding', path: '/onboarding', icon: ClipboardCheck },
+  { key: 'nav.absence', path: '/absence', icon: CalendarDays },
   { key: 'nav.provisioning', path: '/provisioning', icon: Zap },
   { key: 'nav.settings', path: '/settings', icon: Settings },
 ];

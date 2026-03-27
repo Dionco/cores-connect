@@ -13,6 +13,7 @@ import EmployeeProfile from "@/pages/EmployeeProfile";
 import OnboardingPage from "@/pages/OnboardingPage";
 import ProvisioningPage from "@/pages/ProvisioningPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AbsencePage from "@/pages/AbsencePage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const AuthenticatedRoutes = () => {
         <Route path="/employees" element={<EmployeesPage />} />
         <Route path="/employees/:id" element={<EmployeeProfile />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/absence" element={<AbsencePage />} />
         <Route path="/provisioning" element={<ProvisioningPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />

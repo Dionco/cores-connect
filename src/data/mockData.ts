@@ -228,3 +228,58 @@ export const mockProvisioningJobs: ProvisioningJob[] = [
 
 export const departments: Department[] = ['Sales', 'Customs & Compliance', 'Logistics'];
 export const contractTypes: ContractType[] = ['Permanent', 'Intern', 'Freelance'];
+
+// === Leave Management Types & Data ===
+
+export type LeaveType = 'Vacation' | 'Sick' | 'Parental';
+export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
+
+export interface LeaveBalance {
+  userId: string;
+  totalAnnualDays: number;
+  usedDays: number;
+  pendingDays: number;
+  remainingDays: number;
+}
+
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  employeeName: string;
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  substituteUserId?: string;
+  status: LeaveStatus;
+  createdAt: string;
+  days: number;
+}
+
+export const mockLeaveBalances: LeaveBalance[] = [
+  { userId: 'emp-001', totalAnnualDays: 25, usedDays: 8, pendingDays: 3, remainingDays: 14 },
+  { userId: 'emp-002', totalAnnualDays: 25, usedDays: 5, pendingDays: 0, remainingDays: 20 },
+  { userId: 'emp-003', totalAnnualDays: 25, usedDays: 12, pendingDays: 5, remainingDays: 8 },
+  { userId: 'emp-004', totalAnnualDays: 25, usedDays: 3, pendingDays: 0, remainingDays: 22 },
+  { userId: 'emp-005', totalAnnualDays: 25, usedDays: 7, pendingDays: 2, remainingDays: 16 },
+  { userId: 'emp-006', totalAnnualDays: 25, usedDays: 10, pendingDays: 0, remainingDays: 15 },
+  { userId: 'emp-007', totalAnnualDays: 15, usedDays: 0, pendingDays: 0, remainingDays: 15 },
+  { userId: 'emp-008', totalAnnualDays: 25, usedDays: 0, pendingDays: 5, remainingDays: 20 },
+  { userId: 'emp-009', totalAnnualDays: 25, usedDays: 0, pendingDays: 0, remainingDays: 25 },
+  { userId: 'emp-010', totalAnnualDays: 25, usedDays: 20, pendingDays: 0, remainingDays: 5 },
+];
+
+export const mockLeaveRequests: LeaveRequest[] = [
+  { id: 'lr-001', userId: 'emp-001', employeeName: 'Sophie de Vries', leaveType: 'Vacation', startDate: '2026-04-14', endDate: '2026-04-18', substituteUserId: 'emp-004', status: 'Pending', createdAt: '2026-03-20', days: 5 },
+  { id: 'lr-002', userId: 'emp-003', employeeName: 'Emma Jansen', leaveType: 'Vacation', startDate: '2026-04-07', endDate: '2026-04-11', status: 'Pending', createdAt: '2026-03-18', days: 5 },
+  { id: 'lr-003', userId: 'emp-005', employeeName: 'Lisa van den Berg', leaveType: 'Sick', startDate: '2026-03-24', endDate: '2026-03-25', status: 'Pending', createdAt: '2026-03-24', days: 2 },
+  { id: 'lr-004', userId: 'emp-008', employeeName: 'Niels de Groot', leaveType: 'Vacation', startDate: '2026-05-05', endDate: '2026-05-09', substituteUserId: 'emp-006', status: 'Pending', createdAt: '2026-03-22', days: 5 },
+  { id: 'lr-005', userId: 'emp-001', employeeName: 'Sophie de Vries', leaveType: 'Vacation', startDate: '2026-01-06', endDate: '2026-01-10', status: 'Approved', createdAt: '2025-12-15', days: 5 },
+  { id: 'lr-006', userId: 'emp-001', employeeName: 'Sophie de Vries', leaveType: 'Sick', startDate: '2026-02-17', endDate: '2026-02-19', status: 'Approved', createdAt: '2026-02-17', days: 3 },
+  { id: 'lr-007', userId: 'emp-002', employeeName: 'Jan Bakker', leaveType: 'Vacation', startDate: '2026-02-24', endDate: '2026-02-28', status: 'Approved', createdAt: '2026-02-01', days: 5 },
+  { id: 'lr-008', userId: 'emp-003', employeeName: 'Emma Jansen', leaveType: 'Parental', startDate: '2026-01-13', endDate: '2026-01-24', status: 'Approved', createdAt: '2025-12-20', days: 10 },
+  { id: 'lr-009', userId: 'emp-003', employeeName: 'Emma Jansen', leaveType: 'Sick', startDate: '2026-03-10', endDate: '2026-03-11', status: 'Approved', createdAt: '2026-03-10', days: 2 },
+  { id: 'lr-010', userId: 'emp-006', employeeName: 'Thomas Mulder', leaveType: 'Vacation', startDate: '2026-03-03', endDate: '2026-03-14', status: 'Approved', createdAt: '2026-02-15', days: 10 },
+  { id: 'lr-011', userId: 'emp-004', employeeName: 'Daan Visser', leaveType: 'Vacation', startDate: '2026-02-10', endDate: '2026-02-12', status: 'Approved', createdAt: '2026-01-20', days: 3 },
+  { id: 'lr-012', userId: 'emp-005', employeeName: 'Lisa van den Berg', leaveType: 'Vacation', startDate: '2026-01-20', endDate: '2026-01-24', status: 'Approved', createdAt: '2026-01-05', days: 5 },
+  { id: 'lr-013', userId: 'emp-005', employeeName: 'Lisa van den Berg', leaveType: 'Sick', startDate: '2026-03-03', endDate: '2026-03-04', status: 'Rejected', createdAt: '2026-03-03', days: 2 },
+];
