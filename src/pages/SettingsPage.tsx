@@ -14,7 +14,7 @@ const SettingsPage = () => {
 
   const [companyName, setCompanyName] = useState('Cores');
   const [domain, setDomain] = useState('@cores.nl');
-  const [depts, setDepts] = useState(['Sales', 'Customs & Compliance', 'Logistics']);
+  const [depts, setDepts] = useState(['Sales', 'Customs & Compliance', 'Transport']);
   const [newDept, setNewDept] = useState('');
   const [licenseType, setLicenseType] = useState('Business Premium');
   const [spGroup, setSpGroup] = useState('Cores');
@@ -31,7 +31,7 @@ const SettingsPage = () => {
   const mailboxMap = [
     { dept: 'Sales', mailboxes: ['sales@cores.nl', 'trading@cores.nl'] },
     { dept: 'Customs & Compliance', mailboxes: ['customs@cores.nl'] },
-    { dept: 'Logistics', mailboxes: ['transport@cores.nl'] },
+    { dept: 'Transport', mailboxes: ['transport@cores.nl'] },
     { dept: 'Everyone', mailboxes: ['SharePoint group "Cores"'] },
   ];
 

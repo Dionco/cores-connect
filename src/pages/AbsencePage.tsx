@@ -13,6 +13,7 @@ import StatusBadge from '@/components/StatusBadge';
 import { CalendarDays, CalendarIcon, Check, Clock, Plus, Umbrella, X, Baby, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO, isSameMonth, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { createAppNotification } from '@/lib/notifications';
 import { useToast } from '@/hooks/use-toast';
 
 const CURRENT_USER_ID = 'emp-001'; // Simulated logged-in user
@@ -121,9 +122,18 @@ const AbsencePage = () => {
     setFormSubstitute('');
     setFormLeaveType('Vacation');
     toast({ title: t('absence.requestSubmitted') });
+
+    void createAppNotification({
+      title: 'Leave request submitted',
+      description: `${newRequest.employeeName} requested ${days} day(s) of leave.`,
+      type: 'info',
+      link: '/absence',
+      payload: { requestId: newRequest.id },
+    });
   };
 
   const handleApprove = (requestId: string) => {
+    const request = leaveRequests.find((item) => item.id === requestId);
     setLeaveRequests(prev => prev.map(r => {
       if (r.id !== requestId) return r;
       setBalances(bs => bs.map(b => b.userId === r.userId
@@ -133,9 +143,20 @@ const AbsencePage = () => {
       return { ...r, status: 'Approved' as LeaveStatus };
     }));
     toast({ title: t('absence.requestApproved') });
+
+    if (request) {
+      void createAppNotification({
+        title: 'Leave request approved',
+        description: `${request.employeeName}'s leave request was approved.`,
+        type: 'success',
+        link: '/absence',
+        payload: { requestId: request.id },
+      });
+    }
   };
 
   const handleReject = (requestId: string) => {
+    const request = leaveRequests.find((item) => item.id === requestId);
     setLeaveRequests(prev => prev.map(r => {
       if (r.id !== requestId) return r;
       setBalances(bs => bs.map(b => b.userId === r.userId
@@ -145,6 +166,16 @@ const AbsencePage = () => {
       return { ...r, status: 'Rejected' as LeaveStatus };
     }));
     toast({ title: t('absence.requestRejected') });
+
+    if (request) {
+      void createAppNotification({
+        title: 'Leave request rejected',
+        description: `${request.employeeName}'s leave request was rejected.`,
+        type: 'error',
+        link: '/absence',
+        payload: { requestId: request.id },
+      });
+    }
   };
 
   // Team Calendar logic

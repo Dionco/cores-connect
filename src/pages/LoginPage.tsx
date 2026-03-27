@@ -8,13 +8,38 @@ import coresLogo from '@/assets/cores-logo.svg';
 
 const LoginPage = () => {
   const { t } = useLanguage();
-  const { login, loginSSO } = useAuth();
+  const { login, loginSSO, authMode } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingSSO, setIsSubmittingSSO] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password);
+    setFormError('');
+    setIsSubmitting(true);
+
+    try {
+      await login(email, password);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Sign in failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSSOLogin = async () => {
+    setFormError('');
+    setIsSubmittingSSO(true);
+
+    try {
+      await loginSSO();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'SSO sign in failed.');
+    } finally {
+      setIsSubmittingSSO(false);
+    }
   };
 
   return (
@@ -32,7 +57,8 @@ const LoginPage = () => {
 
           {/* Microsoft SSO */}
           <button
-            onClick={loginSSO}
+            onClick={handleSSOLogin}
+            disabled={isSubmittingSSO || isSubmitting}
             className="flex w-full items-center justify-center gap-3 rounded-lg bg-[#2F2F2F] px-4 py-3 text-sm font-medium text-white hover:bg-[#1a1a1a] transition-colors"
           >
             <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
@@ -43,6 +69,12 @@ const LoginPage = () => {
             </svg>
             {t('login.sso')}
           </button>
+
+          {authMode === 'mock' && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Supabase is not configured yet. Login currently uses mock mode.
+            </p>
+          )}
 
           {/* Divider */}
           <div className="my-6 flex items-center gap-3">
@@ -75,11 +107,16 @@ const LoginPage = () => {
             </div>
             <Button
               type="submit"
+              disabled={isSubmitting || isSubmittingSSO}
               className="w-full text-white font-semibold"
               style={{ background: 'linear-gradient(135deg, #84e9e9, #84e988)' }}
             >
-              {t('login.submit')}
+              {isSubmitting ? 'Signing in...' : t('login.submit')}
             </Button>
+
+            {formError && (
+              <p className="text-sm text-destructive">{formError}</p>
+            )}
           </form>
         </CardContent>
       </Card>

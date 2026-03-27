@@ -1,22 +1,47 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { mockProvisioningJobs } from '@/data/mockData';
+import { retryProvisioningAutomation } from '@/lib/automation/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { CheckCircle2, Clock, AlertCircle, Zap, RotateCcw } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import { createAppNotification } from '@/lib/notifications';
 import { toast } from '@/hooks/use-toast';
 
 const ProvisioningPage = () => {
   const { t } = useLanguage();
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const job = mockProvisioningJobs.find(j => j.id === selectedJob);
 
-  const handleRetry = (e: React.MouseEvent, jobId: string) => {
+  const handleRetry = async (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
-    toast({ title: 'Provisioning job requeued', description: `Job ${jobId} has been requeued.` });
+
+    setRetryingJobId(jobId);
+
+    try {
+      const result = await retryProvisioningAutomation(jobId);
+      toast({
+        title: 'Provisioning job requeued',
+        description: `Job ${result.jobId} retry #${result.retryCount} is ${result.status.toLowerCase()}.`,
+      });
+
+      void createAppNotification({
+        title: 'Provisioning job requeued',
+        description: `Job ${result.jobId} was requeued for retry #${result.retryCount}.`,
+        type: 'warning',
+        link: '/provisioning',
+        payload: { jobId: result.jobId, retryCount: result.retryCount, status: result.status },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to retry provisioning job.';
+      toast({ title: 'Provisioning retry failed', description: message, variant: 'destructive' });
+    } finally {
+      setRetryingJobId(null);
+    }
   };
 
   return (
@@ -55,7 +80,15 @@ const ProvisioningPage = () => {
                     <TableCell className="hidden md:table-cell text-sm">{j.completedAt || '—'}</TableCell>
                     <TableCell>
                       {j.status === 'Failed' && (
-                        <Button size="sm" variant="outline" className="gap-1" onClick={(e) => handleRetry(e, j.id)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          disabled={retryingJobId === j.id}
+                          onClick={(e) => {
+                            void handleRetry(e, j.id);
+                          }}
+                        >
                           <RotateCcw size={12} /> {t('provisioning.retry')}
                         </Button>
                       )}

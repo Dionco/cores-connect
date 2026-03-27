@@ -1,18 +1,64 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { mockEmployees } from '@/data/mockData';
+import { triggerOnboardingAutomation } from '@/lib/automation/client';
+import { createAppNotification } from '@/lib/notifications';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CheckCircle2, Zap, ClipboardCheck, ArrowLeft } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 const OnboardingPage = () => {
   const { t } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isTriggering, setIsTriggering] = useState(false);
 
   const onboardingEmployees = mockEmployees.filter(e => e.status === 'Onboarding');
   const selected = onboardingEmployees.find(e => e.id === selectedId);
+
+  const handleStartM365Automation = async () => {
+    if (!selected || isTriggering) {
+      return;
+    }
+
+    setIsTriggering(true);
+    try {
+      const result = await triggerOnboardingAutomation({
+        employeeId: selected.id,
+        service: 'M365',
+      });
+
+      toast({
+        title: t('onboarding.automationTriggered'),
+        description: result.reused
+          ? t('onboarding.automationReused')
+          : `${t('onboarding.jobId')}: ${result.jobId}`,
+      });
+
+      void createAppNotification({
+        title: t('onboarding.automationTriggered'),
+        description: `${selected.firstName} ${selected.lastName} (${result.jobId})`,
+        type: 'success',
+        link: '/provisioning',
+        payload: {
+          employeeId: selected.id,
+          jobId: result.jobId,
+          reused: result.reused,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('onboarding.automationError');
+      toast({
+        title: t('onboarding.automationError'),
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTriggering(false);
+    }
+  };
 
   if (selected) {
     const completed = selected.onboardingTasks.filter(t => t.completed).length;
@@ -30,9 +76,20 @@ const OnboardingPage = () => {
             <h1 className="text-2xl font-bold text-foreground">{selected.firstName} {selected.lastName}</h1>
             <p className="text-sm text-muted-foreground">{selected.department} · {selected.role}</p>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-foreground">{pct}%</p>
-            <p className="text-xs text-muted-foreground">{completed}/{total} {t('onboarding.tasks').toLowerCase()}</p>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-2xl font-bold text-foreground">{pct}%</p>
+              <p className="text-xs text-muted-foreground">{completed}/{total} {t('onboarding.tasks').toLowerCase()}</p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleStartM365Automation}
+              disabled={isTriggering}
+              className="gap-2"
+            >
+              <Zap size={14} />
+              {isTriggering ? t('onboarding.triggering') : t('onboarding.startAutomation')}
+            </Button>
           </div>
         </div>
 

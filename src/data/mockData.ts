@@ -1,4 +1,6 @@
-export type Department = 'Sales' | 'Customs & Compliance' | 'Logistics';
+import type { AppNotification } from '@/types/notifications';
+
+export type Department = 'Sales' | 'Customs & Compliance' | 'Transport';
 export type EmployeeStatus = 'Active' | 'Inactive' | 'Onboarding';
 export type ContractType = 'Permanent' | 'Intern' | 'Freelance';
 export type ProvisioningStatus = 'Provisioned' | 'Pending' | 'Failed';
@@ -63,8 +65,8 @@ const createOnboardingTasks = (department: Department): OnboardingTask[] => {
     baseTasks.push({ id: '5s', key: 'task.sharedMailboxSales', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Sales' });
   } else if (department === 'Customs & Compliance') {
     baseTasks.push({ id: '5c', key: 'task.sharedMailboxCustoms', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Customs & Compliance' });
-  } else if (department === 'Logistics') {
-    baseTasks.push({ id: '5l', key: 'task.sharedMailboxTransport', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Logistics' });
+  } else if (department === 'Transport') {
+    baseTasks.push({ id: '5l', key: 'task.sharedMailboxTransport', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Transport' });
   }
 
   baseTasks.push(
@@ -105,10 +107,10 @@ export const mockEmployees: Employee[] = [
   },
   {
     id: 'emp-003', firstName: 'Emma', lastName: 'Jansen', email: 'emma@cores.nl',
-    personalEmail: 'emma.jansen@gmail.com', role: 'Logistics Coordinator', department: 'Logistics',
+    personalEmail: 'emma.jansen@gmail.com', role: 'Transport Coordinator', department: 'Transport',
     startDate: '2025-06-10', contractType: 'Permanent', workPhone: '+31 6 3456 7890',
     personalPhone: '+31 6 0987 6543', status: 'Active', provisioningStatus: 'Provisioned',
-    onboardingTasks: createOnboardingTasks('Logistics').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-06-10 10:00' })),
+    onboardingTasks: createOnboardingTasks('Transport').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2025-06-10 10:00' })),
     provisioningItems: createProvisioningItems('Emma'),
   },
   {
@@ -129,10 +131,10 @@ export const mockEmployees: Employee[] = [
   },
   {
     id: 'emp-006', firstName: 'Thomas', lastName: 'Mulder', email: 'thomas@cores.nl',
-    personalEmail: 'thomas.mulder@gmail.com', role: 'Warehouse Manager', department: 'Logistics',
+    personalEmail: 'thomas.mulder@gmail.com', role: 'Warehouse Manager', department: 'Transport',
     startDate: '2026-01-10', contractType: 'Permanent', workPhone: '+31 6 6789 0123',
     personalPhone: '+31 6 3210 9876', status: 'Active', provisioningStatus: 'Provisioned',
-    onboardingTasks: createOnboardingTasks('Logistics').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2026-01-10 10:00' })),
+    onboardingTasks: createOnboardingTasks('Transport').map(t => ({ ...t, completed: true, completedAt: t.completedAt || '2026-01-10 10:00' })),
     provisioningItems: createProvisioningItems('Thomas'),
   },
   {
@@ -145,10 +147,10 @@ export const mockEmployees: Employee[] = [
   },
   {
     id: 'emp-008', firstName: 'Niels', lastName: 'de Groot', email: 'niels@cores.nl',
-    personalEmail: 'niels.degroot@outlook.com', role: 'Freight Forwarder', department: 'Logistics',
+    personalEmail: 'niels.degroot@outlook.com', role: 'Freight Forwarder', department: 'Transport',
     startDate: '2026-03-10', contractType: 'Permanent', workPhone: '+31 6 8901 2345',
     personalPhone: '+31 6 5432 1098', status: 'Onboarding', provisioningStatus: 'Pending',
-    onboardingTasks: createOnboardingTasks('Logistics').map((t, i) => ({ ...t, completed: i < 4 })),
+    onboardingTasks: createOnboardingTasks('Transport').map((t, i) => ({ ...t, completed: i < 4 })),
     provisioningItems: createProvisioningItems('Niels').map((p, i) => ({ ...p, completed: i < 3 })),
   },
   {
@@ -226,7 +228,7 @@ export const mockProvisioningJobs: ProvisioningJob[] = [
   },
 ];
 
-export const departments: Department[] = ['Sales', 'Customs & Compliance', 'Logistics'];
+export const departments: Department[] = ['Sales', 'Customs & Compliance', 'Transport'];
 export const contractTypes: ContractType[] = ['Permanent', 'Intern', 'Freelance'];
 
 // === Leave Management Types & Data ===
@@ -282,4 +284,52 @@ export const mockLeaveRequests: LeaveRequest[] = [
   { id: 'lr-011', userId: 'emp-004', employeeName: 'Daan Visser', leaveType: 'Vacation', startDate: '2026-02-10', endDate: '2026-02-12', status: 'Approved', createdAt: '2026-01-20', days: 3 },
   { id: 'lr-012', userId: 'emp-005', employeeName: 'Lisa van den Berg', leaveType: 'Vacation', startDate: '2026-01-20', endDate: '2026-01-24', status: 'Approved', createdAt: '2026-01-05', days: 5 },
   { id: 'lr-013', userId: 'emp-005', employeeName: 'Lisa van den Berg', leaveType: 'Sick', startDate: '2026-03-03', endDate: '2026-03-04', status: 'Rejected', createdAt: '2026-03-03', days: 2 },
+];
+
+export const mockNotifications: AppNotification[] = [
+  {
+    id: 'ntf-001',
+    createdAt: '2026-03-27T09:18:00.000Z',
+    title: 'Leave request awaiting approval',
+    description: 'Sophie de Vries submitted a vacation request for 5 days.',
+    type: 'info',
+    isRead: false,
+    link: '/absence',
+  },
+  {
+    id: 'ntf-002',
+    createdAt: '2026-03-27T08:51:00.000Z',
+    title: 'Provisioning completed',
+    description: 'M365 provisioning for Fleur Hendriks finished successfully.',
+    type: 'success',
+    isRead: false,
+    link: '/provisioning',
+  },
+  {
+    id: 'ntf-003',
+    createdAt: '2026-03-27T07:43:00.000Z',
+    title: 'Apple ID job failed',
+    description: 'Apple ID provisioning failed for Niels de Groot. Review job logs.',
+    type: 'error',
+    isRead: false,
+    link: '/provisioning',
+  },
+  {
+    id: 'ntf-004',
+    createdAt: '2026-03-26T16:25:00.000Z',
+    title: 'New onboarding started',
+    description: 'Mila Smit joined onboarding and has pending setup steps.',
+    type: 'info',
+    isRead: true,
+    link: '/onboarding',
+  },
+  {
+    id: 'ntf-005',
+    createdAt: '2026-03-26T11:05:00.000Z',
+    title: 'Missing employee work phone',
+    description: 'One employee profile is missing a work phone number.',
+    type: 'warning',
+    isRead: true,
+    link: '/employees',
+  },
 ];

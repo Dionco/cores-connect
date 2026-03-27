@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, ClipboardCheck, Zap, Settings, Menu, X, LogOut, CalendarDays } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import NotificationCenter from '@/components/NotificationCenter';
 import coresLogo from '@/assets/cores-logo.svg';
 
 const navItems = [
@@ -72,7 +73,9 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         {/* Logout */}
         <div className="px-3 pb-6">
           <button
-            onClick={logout}
+            onClick={() => {
+              void logout();
+            }}
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-white/80 hover:bg-white/15 transition-all"
           >
             <LogOut size={18} />
@@ -90,6 +93,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-2">
+            <NotificationCenter />
             <button
               onClick={() => setLanguage('en')}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${

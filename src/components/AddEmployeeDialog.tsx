@@ -11,6 +11,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { createAppNotification } from '@/lib/notifications';
 import { toast } from '@/hooks/use-toast';
 
 interface AddEmployeeDialogProps {
@@ -46,6 +47,14 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     toast({
       title: 'Employee added',
       description: `${firstName} ${lastName} has been added. Provisioning started.`,
+    });
+
+    void createAppNotification({
+      title: 'New onboarding started',
+      description: `${firstName} ${lastName} was added and provisioning started.`,
+      type: 'info',
+      link: '/onboarding',
+      payload: { firstName, lastName, department },
     });
 
     onOpenChange(false);

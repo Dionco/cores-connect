@@ -86,7 +86,7 @@ const translations: Record<string, Record<Language, string>> = {
   // Departments
   'dept.sales': { en: 'Sales', nl: 'Verkoop' },
   'dept.customs': { en: 'Customs & Compliance', nl: 'Douane & Compliance' },
-  'dept.logistics': { en: 'Logistics', nl: 'Logistiek' },
+  'dept.logistics': { en: 'Transport', nl: 'Logistiek' },
 
   // Statuses
   'status.active': { en: 'Active', nl: 'Actief' },
@@ -112,6 +112,12 @@ const translations: Record<string, Record<Language, string>> = {
   'onboarding.tasks': { en: 'Tasks', nl: 'Taken' },
   'onboarding.automated': { en: 'Automated', nl: 'Geautomatiseerd' },
   'onboarding.manual': { en: 'Manual', nl: 'Handmatig' },
+  'onboarding.startAutomation': { en: 'Start M365 automation', nl: 'Start M365-automatisering' },
+  'onboarding.triggering': { en: 'Triggering...', nl: 'Starten...' },
+  'onboarding.automationTriggered': { en: 'Automation triggered', nl: 'Automatisering gestart' },
+  'onboarding.automationReused': { en: 'An active provisioning job already exists.', nl: 'Er bestaat al een actieve provisioning-taak.' },
+  'onboarding.automationError': { en: 'Automation trigger failed', nl: 'Automatisering starten mislukt' },
+  'onboarding.jobId': { en: 'Job ID', nl: 'Taak-ID' },
   'onboarding.noActive': { en: 'No active onboardings', nl: 'Geen actieve onboardings' },
   'onboarding.noActiveDesc': { en: 'When new employees are added, their onboarding will appear here.', nl: 'Wanneer nieuwe medewerkers worden toegevoegd, verschijnt hun onboarding hier.' },
 
@@ -205,6 +211,17 @@ const translations: Record<string, Record<Language, string>> = {
   'settings.save': { en: 'Save Changes', nl: 'Wijzigingen Opslaan' },
   'settings.add': { en: 'Add', nl: 'Toevoegen' },
   'settings.delete': { en: 'Delete', nl: 'Verwijderen' },
+
+  // Notifications
+  'notifications.title': { en: 'Notifications', nl: 'Meldingen' },
+  'notifications.subtitle': { en: 'Latest updates from your workspace', nl: 'Laatste updates uit uw werkruimte' },
+  'notifications.empty': { en: "You're all caught up!", nl: 'U bent helemaal bijgewerkt!' },
+  'notifications.markAllRead': { en: 'Mark all as read', nl: 'Alles als gelezen markeren' },
+  'notifications.clearAll': { en: 'Clear all', nl: 'Alles wissen' },
+  'notifications.deleteAction': { en: 'Delete notification', nl: 'Melding verwijderen' },
+  'notifications.openAction': { en: 'Open', nl: 'Openen' },
+  'notifications.openAria': { en: 'Open notifications', nl: 'Meldingen openen' },
+  'notifications.unreadAria': { en: 'Open notifications, {count} unread', nl: 'Meldingen openen, {count} ongelezen' },
 };
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
