@@ -33,6 +33,11 @@ const translations: Record<string, Record<Language, string>> = {
   'dashboard.recentEmployees': { en: 'Recently Added Employees', nl: 'Recent Toegevoegde Medewerkers' },
   'dashboard.onboardingProgress': { en: 'Onboarding Progress', nl: 'Onboarding Voortgang' },
   'dashboard.last30days': { en: 'Last 30 days', nl: 'Laatste 30 dagen' },
+  'dashboard.absence': { en: 'Absence Overview', nl: 'Verzuimoverzicht' },
+  'dashboard.viewAll': { en: 'View all', nl: 'Bekijk alles' },
+  'absence.pendingRequests': { en: 'Pending Requests', nl: 'Openstaande Aanvragen' },
+  'absence.totalDaysTaken': { en: 'Total Days Taken', nl: 'Totaal Opgenomen' },
+  'absence.days': { en: 'Days', nl: 'Dagen' },
 
   // Employees
   'employees.title': { en: 'Employees', nl: 'Medewerkers' },

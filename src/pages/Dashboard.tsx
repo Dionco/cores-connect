@@ -1,12 +1,13 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees, mockProvisioningJobs } from '@/data/mockData';
+import { mockEmployees, mockProvisioningJobs, mockLeaveRequests, mockLeaveBalances } from '@/data/mockData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Users, ClipboardCheck, Zap, UserPlus } from 'lucide-react';
+import { Users, ClipboardCheck, Zap, UserPlus, CalendarDays, ArrowRight } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
-
+import { Badge } from '@/components/ui/badge';
 const Dashboard = () => {
   const { t } = useLanguage();
 
@@ -105,6 +106,71 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Absence widget */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={18} className="text-cores-teal" />
+              <h2 className="text-base font-semibold text-foreground">{t('dashboard.absence')}</h2>
+            </div>
+            <Link to="/absence" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+              {t('dashboard.viewAll')} <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {/* Summary row */}
+          <div className="grid grid-cols-3 gap-3">
+            {(() => {
+              const pending = mockLeaveRequests.filter(r => r.status === 'Pending').length;
+              const approved = mockLeaveRequests.filter(r => r.status === 'Approved').length;
+              const totalOut = mockLeaveBalances.reduce((sum, b) => sum + b.usedDays, 0);
+              const summaryItems = [
+                { label: t('absence.pendingRequests'), value: pending, accent: 'bg-cores-orange/15 text-cores-orange' },
+                { label: t('absence.approved'), value: approved, accent: 'bg-cores-teal/15 text-cores-teal' },
+                { label: t('absence.totalDaysTaken'), value: totalOut, accent: 'bg-muted text-muted-foreground' },
+              ];
+              return summaryItems.map(s => (
+                <div key={s.label} className={`rounded-lg p-3 ${s.accent}`}>
+                  <p className="text-xl font-bold">{s.value}</p>
+                  <p className="text-[11px] font-medium">{s.label}</p>
+                </div>
+              ));
+            })()}
+          </div>
+
+          {/* Pending requests list */}
+          {mockLeaveRequests.filter(r => r.status === 'Pending').length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{t('employees.name')}</TableHead>
+                  <TableHead>{t('absence.type')}</TableHead>
+                  <TableHead>{t('absence.dates')}</TableHead>
+                  <TableHead>{t('absence.days')}</TableHead>
+                  <TableHead>{t('employees.status')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mockLeaveRequests.filter(r => r.status === 'Pending').slice(0, 4).map(req => (
+                  <TableRow key={req.id}>
+                    <TableCell className="font-medium">{req.employeeName}</TableCell>
+                    <TableCell>{req.leaveType}</TableCell>
+                    <TableCell className="text-xs">{req.startDate} → {req.endDate}</TableCell>
+                    <TableCell>{req.days}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="border-cores-orange text-cores-orange text-[11px]">
+                        {t('absence.pending')}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
