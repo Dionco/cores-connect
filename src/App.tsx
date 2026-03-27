@@ -13,6 +13,7 @@ import EmployeeProfile from "@/pages/EmployeeProfile";
 import OnboardingPage from "@/pages/OnboardingPage";
 import ProvisioningPage from "@/pages/ProvisioningPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AbsencePage from "@/pages/AbsencePage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
