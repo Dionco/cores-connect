@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import coresLogo from '@/assets/cores-logo.png';
+import coresLogo from '@/assets/cores-logo.svg';
 
 const LoginPage = () => {
   const { t } = useLanguage();

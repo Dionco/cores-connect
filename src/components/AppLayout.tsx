@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, ClipboardCheck, Zap, Settings, Menu, X, LogOut, CalendarDays } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import coresLogo from '@/assets/cores-logo.png';
+import coresLogo from '@/assets/cores-logo.svg';
 
 const navItems = [
   { key: 'nav.dashboard', path: '/dashboard', icon: LayoutDashboard },
