@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardCheck, Zap, Settings, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardCheck, Zap, Settings, Menu, X, LogOut, CalendarDays } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import coresLogo from '@/assets/cores-logo.png';
