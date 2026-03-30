@@ -4,6 +4,7 @@ import { microsoftProvider } from '../providers/microsoft.ts';
 import type {
   AutomationService,
   EmployeeRow,
+  ProvisioningOptions,
   ProvisioningJobRow,
   ProvisioningProvider,
   ProvisioningStep,
@@ -87,10 +88,11 @@ const runJob = async (
     jobId: string;
     employee: EmployeeRow;
     service: AutomationService;
+    options?: ProvisioningOptions;
     retryCount?: number;
   },
 ): Promise<'Completed' | 'Failed'> => {
-  const { jobId, employee, service, retryCount } = args;
+  const { jobId, employee, service, options, retryCount } = args;
   const provider = getProvider(service);
   const runningAt = new Date().toISOString();
 
@@ -106,7 +108,7 @@ const runJob = async (
   }
 
   try {
-    const providerLogs = await provider.run(employee);
+    const providerLogs = await provider.run(employee, options);
     await insertLogs(admin, jobId, providerLogs);
 
     const completedAt = new Date().toISOString();
@@ -155,9 +157,10 @@ export const triggerProvisioningForEmployee = async (
     employee: EmployeeRow;
     service: AutomationService;
     source: 'manual-ui-trigger' | 'retry-endpoint';
+    options?: ProvisioningOptions;
   },
 ): Promise<TriggerResult> => {
-  const { employee, service, source } = args;
+  const { employee, service, source, options } = args;
   const idempotencyKey = `employee:${employee.id}:service:${service}:action:create`;
 
   const { data: existingJob, error: existingJobError } = await admin
@@ -210,6 +213,7 @@ export const triggerProvisioningForEmployee = async (
     jobId,
     employee,
     service,
+    options,
   });
 
   return {

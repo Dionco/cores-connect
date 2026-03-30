@@ -72,6 +72,12 @@ const translations: Record<string, Record<Language, string>> = {
   'form.cancel': { en: 'Cancel', nl: 'Annuleren' },
   'form.required': { en: 'This field is required', nl: 'Dit veld is verplicht' },
   'form.provisioningInfo': { en: 'Saving this employee will immediately trigger Microsoft 365 account creation and Apple Business Manager provisioning.', nl: 'Het opslaan van deze medewerker activeert direct het aanmaken van een Microsoft 365 account en Apple Business Manager provisioning.' },
+  'addEmployee.securityGroups.help': { en: 'Choose the folder permissions this employee should receive. Select Read or Edit per folder.', nl: 'Kies de maprechten die deze medewerker moet krijgen. Selecteer Lezen of Bewerken per map.' },
+  'addEmployee.securityGroups.none': { en: 'No security groups available.', nl: 'Geen beveiligingsgroepen beschikbaar.' },
+  'addEmployee.securityGroups.noneMatched': { en: 'No SharePoint folder groups matched the expected naming pattern.', nl: 'Geen SharePoint-mapgroepen komen overeen met het verwachte naamformaat.' },
+  'addEmployee.securityGroups.otherSection': { en: 'Other groups', nl: 'Overige groepen' },
+  'addEmployee.securityGroups.permission.read': { en: 'Read', nl: 'Lezen' },
+  'addEmployee.securityGroups.permission.edit': { en: 'Edit', nl: 'Bewerken' },
 
   // Profile
   'profile.details': { en: 'Details', nl: 'Details' },

@@ -8,6 +8,8 @@ const isPlaceholderSupabaseUrl =
   !supabaseUrl || supabaseUrl.includes('your-project-ref.supabase.co');
 
 export const isSupabaseConfigured = Boolean(!isPlaceholderSupabaseUrl && supabaseKey);
+export const supabaseFunctionBaseUrl = isSupabaseConfigured ? `${supabaseUrl}/functions/v1` : '';
+export const supabasePublishableClientKey = supabaseKey || '';
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey, {

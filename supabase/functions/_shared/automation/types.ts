@@ -37,8 +37,13 @@ export interface RetryResult {
   retryCount: number;
 }
 
+export interface ProvisioningOptions {
+  selectedMailboxes?: string[];
+  selectedGroupIds?: string[];
+}
+
 export interface ProvisioningProvider {
   service: AutomationService;
   workflowName: string;
-  run: (employee: EmployeeRow) => Promise<ProvisioningStep[]>;
+  run: (employee: EmployeeRow, options?: ProvisioningOptions) => Promise<ProvisioningStep[]>;
 }

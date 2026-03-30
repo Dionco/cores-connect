@@ -12,6 +12,8 @@ const corsHeaders = {
 interface TriggerRequest {
   employeeId?: string;
   service?: 'M365' | 'Apple ID';
+  selectedMailboxes?: string[];
+  selectedGroupIds?: string[];
 }
 
 const PROVISIONING_SERVICE: TriggerRequest['service'] = 'M365';
@@ -57,6 +59,10 @@ Deno.serve(async (req: Request) => {
       employee,
       service,
       source: 'manual-ui-trigger',
+      options: {
+        selectedMailboxes: payload.selectedMailboxes,
+        selectedGroupIds: payload.selectedGroupIds,
+      },
     });
 
     return jsonResponse(200, {

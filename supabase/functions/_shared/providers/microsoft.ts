@@ -1,4 +1,4 @@
-import type { EmployeeRow, ProvisioningProvider } from '../automation/types.ts';
+import type { EmployeeRow, ProvisioningOptions, ProvisioningProvider } from '../automation/types.ts';
 
 declare const Deno: {
   env: {
@@ -14,10 +14,22 @@ interface MicrosoftGraphConfig {
   usageLocation: string;
   businessPremiumSkuId: string | null;
   defaultGroupId: string | null;
+  defaultSiteId: string | null;
+  securityGroupIds: string[];
   sharedMailboxes: {
     trading: string;
     byDepartment: Record<EmployeeRow['department'], string>;
   };
+}
+
+interface SecurityGroup {
+  id: string;
+  displayName: string;
+}
+
+interface SharedMailbox {
+  email: string;
+  displayName: string;
 }
 
 interface GraphUser {
@@ -25,7 +37,19 @@ interface GraphUser {
   userPrincipalName: string;
 }
 
+interface ExoSharedMailboxRecord {
+  DisplayName?: string;
+  displayName?: string;
+  Name?: string;
+  PrimarySmtpAddress?: string | { Address?: string };
+  primarySmtpAddress?: string | { Address?: string };
+  WindowsEmailAddress?: string;
+  windowsEmailAddress?: string;
+  ExternalDirectoryObjectId?: string;
+}
+
 const GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
+const GRAPH_BETA_BASE_URL = 'https://graph.microsoft.com/beta';
 const EXO_BASE_URL = 'https://outlook.office365.com/adminapi/beta';
 const EXO_TIMEOUT_MS = Number(Deno.env.get('MS_EXO_REQUEST_TIMEOUT_MS') || 20_000);
 const EXO_MAX_ATTEMPTS = Number(Deno.env.get('MS_EXO_MAX_ATTEMPTS') || 3);
@@ -67,7 +91,7 @@ const getRequiredEnv = (name: string): string => {
   return value;
 };
 
-const getConfig = (): MicrosoftGraphConfig => {
+export const getConfig = (): MicrosoftGraphConfig => {
   const domain = getRequiredEnv('MS_GRAPH_DOMAIN');
   return {
     tenantId: getRequiredEnv('MS_GRAPH_TENANT_ID'),
@@ -77,6 +101,11 @@ const getConfig = (): MicrosoftGraphConfig => {
     usageLocation: Deno.env.get('MS_GRAPH_USAGE_LOCATION') || 'NL',
     businessPremiumSkuId: Deno.env.get('MS_GRAPH_BUSINESS_PREMIUM_SKU_ID') || null,
     defaultGroupId: Deno.env.get('MS_GRAPH_DEFAULT_GROUP_ID') || null,
+    defaultSiteId: Deno.env.get('MS_GRAPH_DEFAULT_SITE_ID') || null,
+    securityGroupIds: (Deno.env.get('MS_GRAPH_SECURITY_GROUP_IDS') || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
     sharedMailboxes: {
       trading: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRADING') || `trading@${domain}`,
       byDepartment: {
@@ -154,7 +183,7 @@ const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: numbe
   }
 };
 
-const getAccessToken = async (config: MicrosoftGraphConfig, scope: string): Promise<string> => {
+export const getAccessToken = async (config: MicrosoftGraphConfig, scope: string): Promise<string> => {
   const tokenEndpoint = `https://login.microsoftonline.com/${config.tenantId}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
     client_id: config.clientId,
@@ -315,6 +344,36 @@ const addUserToGroup = async (
   throw new Error(`Failed to add user to group ${groupId}: ${errorMessage}`);
 };
 
+const favoriteSharePointSite = async (
+  accessToken: string,
+  userId: string,
+  siteId: string,
+): Promise<'added' | 'already-member'> => {
+  const response = await fetch(
+    `${GRAPH_BASE_URL}/users/${encodeURIComponent(userId)}/sites/${encodeURIComponent(siteId)}/microsoft.graph.add`,
+    {
+      method: 'POST',
+      headers: createGraphHeaders(accessToken),
+    },
+  );
+
+  if (response.status === 204) {
+    return 'added';
+  }
+
+  const errorMessage = await readGraphError(response);
+  // The endpoint may return 400 if site is already favorited
+  if (response.status === 400 && /already|favorite/i.test(errorMessage)) {
+    return 'already-member';
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to favorite SharePoint site ${siteId}: ${errorMessage}`);
+  }
+
+  return 'added';
+};
+
 // Grant a user FullAccess to an Exchange shared mailbox via the Exchange Online
 // cmdlet invocation API. This mirrors exactly what the EXO V3 PowerShell module
 // does — it POSTs to /InvokeCommand with a CmdletInput body rather than using
@@ -409,10 +468,222 @@ const addUserToSharedMailbox = async (
   throw new Error(`Failed to grant FullAccess on ${mailboxEmail} to ${userUpn}: exhausted retry attempts`);
 };
 
+export const listSecurityGroups = async (accessToken: string): Promise<SecurityGroup[]> => {
+  const groups: SecurityGroup[] = [];
+  let url: string | null =
+    `${GRAPH_BASE_URL}/groups?$filter=securityEnabled eq true&$select=id,displayName&$top=999&$count=true`;
+
+  while (url) {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...createGraphHeaders(accessToken),
+        ConsistencyLevel: 'eventual',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to list security groups: ${await readGraphError(response)}`);
+    }
+
+    const payload = (await response.json()) as {
+      value: SecurityGroup[];
+      '@odata.nextLink'?: string;
+    };
+
+    groups.push(...payload.value);
+    url = payload['@odata.nextLink'] ?? null;
+  }
+
+  return groups;
+};
+
+export const listSharedMailboxes = async (accessToken: string): Promise<SharedMailbox[]> => {
+  const mailboxes: SharedMailbox[] = [];
+  let url: string | null =
+    `${GRAPH_BETA_BASE_URL}/users?$select=displayName,mail,mailboxSettings,assignedLicenses&$top=999`;
+
+  while (url) {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: createGraphHeaders(accessToken),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to list shared mailboxes: ${await readGraphError(response)}`);
+    }
+
+    const payload = (await response.json()) as {
+      value: Array<{
+        displayName?: string;
+        mail?: string | null;
+        mailboxSettings?: { userPurpose?: string };
+        assignedLicenses?: Array<{ skuId?: string }>;
+      }>;
+      '@odata.nextLink'?: string;
+    };
+
+    for (const item of payload.value) {
+      if (!item.mail) {
+        continue;
+      }
+
+      const userPurpose = item.mailboxSettings?.userPurpose?.toLowerCase();
+      const isSharedByPurpose = userPurpose === 'shared';
+      const hasNoLicenses = (item.assignedLicenses?.length || 0) === 0;
+
+      // Prefer explicit mailbox purpose and fall back to unlicensed mailboxes.
+      if (!isSharedByPurpose && !hasNoLicenses) {
+        continue;
+      }
+
+      mailboxes.push({
+        email: item.mail,
+        displayName: item.displayName || item.mail,
+      });
+    }
+
+    url = payload['@odata.nextLink'] ?? null;
+  }
+
+  return mailboxes;
+};
+
+const getConfiguredSharedMailboxes = (config: MicrosoftGraphConfig): SharedMailbox[] => {
+  const configured = [config.sharedMailboxes.trading, ...Object.values(config.sharedMailboxes.byDepartment)];
+  const unique = [...new Set(configured.map((mailbox) => mailbox.trim()).filter(Boolean))];
+
+  return unique.map((email) => ({
+    email,
+    displayName: email.split('@')[0],
+  }));
+};
+
+const normalizeSharedMailboxFromExo = (row: ExoSharedMailboxRecord): SharedMailbox | null => {
+  const smtpAddress = row.PrimarySmtpAddress || row.primarySmtpAddress;
+  const email =
+    typeof smtpAddress === 'string'
+      ? smtpAddress
+      : smtpAddress?.Address || row.WindowsEmailAddress || row.windowsEmailAddress || null;
+
+  if (!email) {
+    return null;
+  }
+
+  const displayName = row.DisplayName || row.displayName || row.Name || email;
+
+  return { email, displayName };
+};
+
+const listSharedMailboxesViaExo = async (
+  exoToken: string,
+  tenantId: string,
+): Promise<SharedMailbox[]> => {
+  const url = `${EXO_BASE_URL}/${encodeURIComponent(tenantId)}/InvokeCommand`;
+  const response = await fetchWithTimeout(
+    url,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${exoToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CmdletName': 'Get-EXOMailbox',
+        'X-ResponseFormat': 'json',
+        'X-SerializationLevel': 'Full',
+      },
+      body: JSON.stringify({
+        CmdletInput: {
+          CmdletName: 'Get-EXOMailbox',
+          Parameters: {
+            RecipientTypeDetails: ['SharedMailbox'],
+            ResultSize: 'Unlimited',
+          },
+        },
+      }),
+    },
+    EXO_TIMEOUT_MS,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to list shared mailboxes via EXO: ${await readGraphError(response)}`);
+  }
+
+  const payload = (await response.json()) as {
+    value?: ExoSharedMailboxRecord[];
+    results?: ExoSharedMailboxRecord[];
+    output?: ExoSharedMailboxRecord[];
+    Output?: ExoSharedMailboxRecord[];
+    Data?: ExoSharedMailboxRecord[];
+  } | ExoSharedMailboxRecord[];
+
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload.value || payload.results || payload.output || payload.Output || payload.Data || [];
+
+  const mapped = rows
+    .map(normalizeSharedMailboxFromExo)
+    .filter((row): row is SharedMailbox => Boolean(row));
+
+  const unique = [...new Map(mapped.map((row) => [row.email.toLowerCase(), row])).values()];
+
+  return unique;
+};
+
+export const listSharedMailboxesWithFallback = async (
+  config: MicrosoftGraphConfig,
+  graphToken: string,
+  exoToken?: string,
+): Promise<SharedMailbox[]> => {
+  if (exoToken) {
+    try {
+      const fromExo = await listSharedMailboxesViaExo(exoToken, config.tenantId);
+      if (fromExo.length > 0) {
+        return fromExo;
+      }
+    } catch (error) {
+      console.error('EXO shared mailbox lookup failed', error);
+    }
+  }
+
+  try {
+    const fromGraph = await listSharedMailboxes(graphToken);
+    if (fromGraph.length > 0) {
+      return fromGraph;
+    }
+  } catch (error) {
+    console.error('Graph shared mailbox lookup failed', error);
+  }
+
+  return getConfiguredSharedMailboxes(config);
+};
+
+const addUserToSecurityGroups = async (
+  accessToken: string,
+  userId: string,
+  groupIds: string[],
+): Promise<Array<{ step: string; status: 'done' | 'pending' | 'error'; timestamp: string }>> => {
+  const logs: Array<{ step: string; status: 'done' | 'pending' | 'error'; timestamp: string }> = [];
+
+  for (const groupId of groupIds) {
+    const membership = await addUserToGroup(accessToken, userId, groupId);
+    logs.push({
+      step:
+        membership === 'added'
+          ? `Added user to security group ${groupId}`
+          : `User already in security group ${groupId}`,
+      status: 'done',
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  return logs;
+};
+
 export const microsoftProvider: ProvisioningProvider = {
   service: 'M365',
   workflowName: 'm365-onboarding-v1',
-  run: async (employee: EmployeeRow) => {
+  run: async (employee: EmployeeRow, options?: ProvisioningOptions) => {
     const config = getConfig();
 
     // Graph token — used for user creation, licence assignment, and M365 Group membership.
@@ -459,37 +730,38 @@ export const microsoftProvider: ProvisioningProvider = {
       });
     }
 
-    // Grant FullAccess on trading@cores.nl to all employees.
-    const tradingMailbox = config.sharedMailboxes.trading;
-    const tradingResult = await addUserToSharedMailbox(
-      exoToken,
-      config.tenantId,
-      tradingMailbox,
-      user.userPrincipalName,
-    );
-    logs.push({
-      step:
-        tradingResult.status === 'added'
-          ? `Granted FullAccess on shared mailbox ${tradingMailbox} (attempts: ${tradingResult.attempts}; latencyMs: ${tradingResult.latencyMs})`
-          : `User already has FullAccess on shared mailbox ${tradingMailbox} (attempts: ${tradingResult.attempts}; latencyMs: ${tradingResult.latencyMs})`,
-      status: 'done',
-      timestamp: new Date().toISOString(),
-    });
+    const manualMailboxSelectionProvided = options?.selectedMailboxes !== undefined;
+    const configuredMailboxTargets = [
+      config.sharedMailboxes.trading,
+      config.sharedMailboxes.byDepartment[employee.department],
+    ];
+    const mailboxTargets = manualMailboxSelectionProvided
+      ? (options?.selectedMailboxes || [])
+      : configuredMailboxTargets;
+    const uniqueMailboxTargets = [...new Set(mailboxTargets.map((mailbox) => mailbox.trim()).filter(Boolean))];
 
-    // Grant FullAccess on the department-specific shared mailbox.
-    const deptMailbox = config.sharedMailboxes.byDepartment[employee.department];
-    if (deptMailbox) {
-      const deptResult = await addUserToSharedMailbox(
-        exoToken,
-        config.tenantId,
-        deptMailbox,
-        user.userPrincipalName,
-      );
+    if (uniqueMailboxTargets.length > 0) {
+      for (const mailboxEmail of uniqueMailboxTargets) {
+        const mailboxResult = await addUserToSharedMailbox(
+          exoToken,
+          config.tenantId,
+          mailboxEmail,
+          user.userPrincipalName,
+        );
+        logs.push({
+          step:
+            mailboxResult.status === 'added'
+              ? `Granted FullAccess on shared mailbox ${mailboxEmail} (attempts: ${mailboxResult.attempts}; latencyMs: ${mailboxResult.latencyMs})`
+              : `User already has FullAccess on shared mailbox ${mailboxEmail} (attempts: ${mailboxResult.attempts}; latencyMs: ${mailboxResult.latencyMs})`,
+          status: 'done',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
       logs.push({
-        step:
-          deptResult.status === 'added'
-            ? `Granted FullAccess on department mailbox ${deptMailbox} (attempts: ${deptResult.attempts}; latencyMs: ${deptResult.latencyMs})`
-            : `User already has FullAccess on department mailbox ${deptMailbox} (attempts: ${deptResult.attempts}; latencyMs: ${deptResult.latencyMs})`,
+        step: manualMailboxSelectionProvided
+          ? 'Skipped shared mailbox assignment (no mailboxes selected)'
+          : 'Skipped shared mailbox assignment (no configured mailboxes)',
         status: 'done',
         timestamp: new Date().toISOString(),
       });
@@ -508,6 +780,42 @@ export const microsoftProvider: ProvisioningProvider = {
     } else {
       logs.push({
         step: 'Skipped default SharePoint group assignment (MS_GRAPH_DEFAULT_GROUP_ID not configured)',
+        status: 'done',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (config.defaultSiteId) {
+      const siteFavorited = await favoriteSharePointSite(graphToken, user.id, config.defaultSiteId);
+      logs.push({
+        step:
+          siteFavorited === 'added'
+            ? 'Favorited default SharePoint site'
+            : 'SharePoint site already favorited',
+        status: 'done',
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      logs.push({
+        step: 'Skipped SharePoint site favoriting (MS_GRAPH_DEFAULT_SITE_ID not configured)',
+        status: 'done',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const manualSecurityGroupsProvided = options?.selectedGroupIds !== undefined;
+    const securityGroupIds = manualSecurityGroupsProvided
+      ? (options?.selectedGroupIds || [])
+      : config.securityGroupIds;
+
+    if (securityGroupIds.length > 0) {
+      const sgLogs = await addUserToSecurityGroups(graphToken, user.id, securityGroupIds);
+      logs.push(...sgLogs);
+    } else {
+      logs.push({
+        step: manualSecurityGroupsProvided
+          ? 'Skipped security group assignment (no groups selected)'
+          : 'Skipped security group assignment (MS_GRAPH_SECURITY_GROUP_IDS not configured)',
         status: 'done',
         timestamp: new Date().toISOString(),
       });
