@@ -21,6 +21,8 @@ const PROVIDERS: Record<string, ProvisioningProvider> = {
   M365: microsoftProvider,
 };
 
+export const MAX_RETRY_ATTEMPTS = 3;
+
 export const getProvider = (service: AutomationService): ProvisioningProvider => {
   const provider = PROVIDERS[service];
   if (!provider) {
@@ -237,6 +239,10 @@ export const retryProvisioningJob = async (
 
   if (job.status !== 'Failed') {
     throw new Error('Only failed jobs can be retried');
+  }
+
+  if ((job.retry_count ?? 0) >= MAX_RETRY_ATTEMPTS) {
+    throw new Error(`Retry limit reached (${MAX_RETRY_ATTEMPTS} max attempts)`);
   }
 
   const employee = await findEmployeeById(admin, job.employee_id);

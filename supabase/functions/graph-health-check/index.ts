@@ -16,7 +16,9 @@ interface HealthCheckResult {
   ok: boolean;
   checks: {
     token: { ok: boolean; message: string };
+    exoToken: { ok: boolean; message: string };
     sku: { ok: boolean; message: string; skuId: string | null };
+    sharedMailboxes: Array<{ key: string; mailbox: string | null; ok: boolean; message: string }>;
     groups: Array<{ key: string; groupId: string | null; ok: boolean; message: string }>;
   };
 }
@@ -78,6 +80,88 @@ const getAccessToken = async () => {
   }
 
   return payload.access_token;
+};
+
+const getExoAccessToken = async () => {
+  const tenantId = getRequiredEnv('MS_GRAPH_TENANT_ID');
+  const clientId = getRequiredEnv('MS_GRAPH_CLIENT_ID');
+  const clientSecret = getRequiredEnv('MS_GRAPH_CLIENT_SECRET');
+
+  const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: 'client_credentials',
+    scope: 'https://outlook.office365.com/.default',
+  });
+
+  const response = await fetch(tokenEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(`EXO token check failed: ${await readGraphError(response)}`);
+  }
+
+  const payload = (await response.json()) as { access_token?: string };
+  if (!payload.access_token) {
+    throw new Error('EXO token check failed: missing access_token');
+  }
+
+  return payload.access_token;
+};
+
+const isLikelyEmail = (value: string): boolean =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const checkSharedMailboxConfig = (domain: string) => {
+  const checks: Array<{ key: string; mailbox: string | null; ok: boolean; message: string }> = [];
+
+  const configured = [
+    {
+      key: 'MS_EXO_SHARED_MAILBOX_TRADING',
+      mailbox: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRADING') || `trading@${domain}`,
+    },
+    {
+      key: 'MS_EXO_SHARED_MAILBOX_SALES',
+      mailbox: Deno.env.get('MS_EXO_SHARED_MAILBOX_SALES') || `sales@${domain}`,
+    },
+    {
+      key: 'MS_EXO_SHARED_MAILBOX_CUSTOMS',
+      mailbox: Deno.env.get('MS_EXO_SHARED_MAILBOX_CUSTOMS') || `customs@${domain}`,
+    },
+    {
+      key: 'MS_EXO_SHARED_MAILBOX_TRANSPORT',
+      mailbox: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRANSPORT') || `transport@${domain}`,
+    },
+  ];
+
+  for (const entry of configured) {
+    if (!entry.mailbox) {
+      checks.push({
+        key: entry.key,
+        mailbox: null,
+        ok: false,
+        message: 'Missing shared mailbox value',
+      });
+      continue;
+    }
+
+    checks.push({
+      key: entry.key,
+      mailbox: entry.mailbox,
+      ok: isLikelyEmail(entry.mailbox),
+      message: isLikelyEmail(entry.mailbox)
+        ? 'Mailbox format looks valid'
+        : 'Mailbox value is not a valid email address',
+    });
+  }
+
+  return checks;
 };
 
 const graphHeaders = (accessToken: string): HeadersInit => ({
@@ -162,10 +246,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const accessToken = await getAccessToken();
+    await getExoAccessToken();
+    const graphDomain = getRequiredEnv('MS_GRAPH_DOMAIN');
     const skuCheck = await checkSkuVisibility(
       accessToken,
       Deno.env.get('MS_GRAPH_BUSINESS_PREMIUM_SKU_ID') || null,
     );
+    const sharedMailboxChecks = checkSharedMailboxConfig(graphDomain);
 
     const groupConfig: Array<{ key: string; value: string | null }> = [
       { key: 'MS_GRAPH_DEFAULT_GROUP_ID', value: Deno.env.get('MS_GRAPH_DEFAULT_GROUP_ID') || null },
@@ -209,10 +296,17 @@ Deno.serve(async (req: Request) => {
     );
 
     const result: HealthCheckResult = {
-      ok: skuCheck.ok && groupChecks.every((check) => check.ok),
+      ok: skuCheck.ok
+        && groupChecks.every((check) => check.ok)
+        && sharedMailboxChecks.every((check) => check.ok),
       checks: {
         token: { ok: true, message: 'Successfully acquired Graph token' },
+        exoToken: {
+          ok: true,
+          message: 'Successfully acquired Exchange Online token',
+        },
         sku: skuCheck,
+        sharedMailboxes: sharedMailboxChecks,
         groups: groupChecks,
       },
     };
@@ -224,6 +318,7 @@ Deno.serve(async (req: Request) => {
       ok: false,
       checks: {
         token: { ok: false, message },
+        exoToken: { ok: false, message },
       },
     });
   }
