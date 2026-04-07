@@ -90,6 +90,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   const [isResourcesLoading, setIsResourcesLoading] = useState(false);
   const [resourcesError, setResourcesError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [creationPhase, setCreationPhase] = useState<'idle' | 'record' | 'provisioning' | 'finalizing'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({
     firstName: false,
@@ -128,6 +129,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     setIsResourcesLoading(false);
     setResourcesError(null);
     setIsCreating(false);
+    setCreationPhase('idle');
     setErrorMessage(null);
     setErrors({ firstName: false, lastName: false, role: false, department: false });
     setCreatedEmployeeEmail('');
@@ -245,6 +247,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     }
 
     setIsCreating(true);
+    setCreationPhase('record');
     setErrorMessage(null);
     setView('wizard');
 
@@ -262,6 +265,8 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
         personalPhone: personalPhone.trim(),
       });
 
+      setCreationPhase('provisioning');
+
       await triggerOnboardingAutomation({
         employeeId: createdEmployee.id,
         service: 'M365',
@@ -269,6 +274,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
         selectedGroupIds,
       });
 
+      setCreationPhase('finalizing');
       setCreatedEmployeeEmail(createdEmployee.email || deriveWorkEmail(firstName, lastName));
       setView('success');
 
@@ -603,67 +609,118 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     </div>
   );
 
-  const renderStepFour = () => (
-    <div className="space-y-4">
-      <div className="rounded-lg border p-3">
-        <h3 className="mb-2 text-sm font-semibold">Employee</h3>
-        <dl className="space-y-1 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Name</dt>
-            <dd>{firstName} {lastName}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Work Email</dt>
-            <dd>{workEmail || 'Auto-generated on create'}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Role</dt>
-            <dd>{role}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Department</dt>
-            <dd>{department}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Start Date</dt>
-            <dd>{startDate ? format(startDate, 'PPP') : 'Not set'}</dd>
-          </div>
-        </dl>
-      </div>
+  const CREATION_STEPS = [
+    { phase: 'record' as const, label: 'Creating employee record' },
+    { phase: 'provisioning' as const, label: 'Provisioning Microsoft 365 account' },
+    { phase: 'finalizing' as const, label: 'Finalizing setup' },
+  ];
 
-      <div className="rounded-lg border p-3">
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <Mail size={14} /> Shared Mailboxes
+  const renderCreationProgress = () => {
+    const phaseOrder = ['record', 'provisioning', 'finalizing'] as const;
+    const currentIndex = phaseOrder.indexOf(creationPhase as typeof phaseOrder[number]);
+
+    return (
+      <div className="space-y-4 py-2">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-3 text-sm font-semibold">Setting up {firstName} {lastName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">This may take up to a minute — please don't close this dialog.</p>
         </div>
-        {selectedMailboxLabels.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None</p>
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {selectedMailboxLabels.map((mailbox) => <li key={mailbox.key}>{mailbox.label}</li>)}
-          </ul>
+
+        <div className="space-y-2 rounded-lg border p-4">
+          {CREATION_STEPS.map((step, index) => {
+            const isActive = phaseOrder[index] === creationPhase;
+            const isComplete = index < currentIndex;
+            const isPending = index > currentIndex;
+
+            return (
+              <div key={step.phase} className="flex items-center gap-3">
+                {isComplete && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
+                {isActive && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
+                {isPending && <div className="h-4 w-4 shrink-0 rounded-full border-2 border-muted" />}
+                <span className={cn(
+                  'text-sm',
+                  isActive && 'font-medium text-foreground',
+                  isComplete && 'text-muted-foreground',
+                  isPending && 'text-muted-foreground/60',
+                )}>
+                  {step.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStepFour = () => {
+    if (isCreating) {
+      return renderCreationProgress();
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border p-3">
+          <h3 className="mb-2 text-sm font-semibold">Employee</h3>
+          <dl className="space-y-1 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Name</dt>
+              <dd>{firstName} {lastName}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Work Email</dt>
+              <dd>{workEmail || 'Auto-generated on create'}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Role</dt>
+              <dd>{role}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Department</dt>
+              <dd>{department}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Start Date</dt>
+              <dd>{startDate ? format(startDate, 'PPP') : 'Not set'}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <Mail size={14} /> Shared Mailboxes
+          </div>
+          {selectedMailboxLabels.length === 0 ? (
+            <p className="text-sm text-muted-foreground">None</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {selectedMailboxLabels.map((mailbox) => <li key={mailbox.key}>{mailbox.label}</li>)}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <Shield size={14} /> Security Groups
+          </div>
+          {selectedGroupLabels.length === 0 ? (
+            <p className="text-sm text-muted-foreground">None</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {selectedGroupLabels.map((group) => <li key={group.key}>{group.label}</li>)}
+            </ul>
+          )}
+        </div>
+
+        {errorMessage && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            {errorMessage}
+          </div>
         )}
       </div>
-
-      <div className="rounded-lg border p-3">
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <Shield size={14} /> Security Groups
-        </div>
-        {selectedGroupLabels.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None</p>
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {selectedGroupLabels.map((group) => <li key={group.key}>{group.label}</li>)}
-          </ul>
-        )}
-      </div>
-
-      {errorMessage && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   const renderWizardContent = () => {
     if (currentStep === 1) {
@@ -798,45 +855,44 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
 
               {renderWizardContent()}
 
-              <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
-                <Button variant="outline" onClick={closeAndReset} disabled={isCreating}>
-                  {t('form.cancel')}
-                </Button>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={previousStep}
-                    disabled={currentStep === 1 || isCreating}
-                  >
-                    Back
-                  </Button>
-
-                  {currentStep < 4 ? (
-                    <Button onClick={nextStep} disabled={isCreating}>
-                      Next
+              {!isCreating && (
+                <>
+                  <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
+                    <Button variant="outline" onClick={closeAndReset}>
+                      {t('form.cancel')}
                     </Button>
-                  ) : (
-                    <Button onClick={handleCreateAccount} disabled={isCreating}>
-                      {isCreating ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Creating account...
-                        </span>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={previousStep}
+                        disabled={currentStep === 1}
+                      >
+                        Back
+                      </Button>
+
+                      {currentStep < 4 ? (
+                        <Button onClick={nextStep}>
+                          Next
+                        </Button>
                       ) : (
-                        errorMessage ? 'Try Again' : 'Create Account'
+                        <Button onClick={handleCreateAccount}>
+                          {errorMessage ? 'Try Again' : 'Create Account'}
+                        </Button>
                       )}
-                    </Button>
-                  )}
-                </div>
-              </div>
+                    </div>
+                  </div>
 
-              <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <AlertTriangle size={18} className="mt-0.5 shrink-0 text-cores-orange" />
-                <p className="text-xs leading-relaxed text-foreground">
-                  Creating the account runs Microsoft 365 provisioning synchronously and can take a moment.
-                </p>
-              </div>
+                  {currentStep === 4 && (
+                    <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-cores-orange" />
+                      <p className="text-xs leading-relaxed text-foreground">
+                        Creating the account runs Microsoft 365 provisioning synchronously and can take a moment.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}

@@ -19,6 +19,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ALLOWED_EMAIL_DOMAIN = 'cores.nl';
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
@@ -32,6 +34,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const email = session.user.email || '';
+
+    // Enforce domain restriction for SSO users
+    if (email && !email.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
+      supabase?.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+      return;
+    }
+
     const displayName =
       session.user.user_metadata?.full_name ||
       session.user.user_metadata?.name ||
