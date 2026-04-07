@@ -14,6 +14,8 @@ import type {
 } from '@/lib/automation/types';
 
 type EdgeFunctionErrorPayload = {
+  code?: string;
+  field?: string;
   error?: string;
   message?: string;
 };
@@ -120,7 +122,7 @@ export const createEmployeeRecord = async (
   let accessToken = await getAccessTokenOrRefresh();
 
   let response = await executeCreate(accessToken);
-  let payload = (await response.json().catch(() => null)) as CreateEmployeeResult & { error?: string; message?: string } | null;
+  let payload = (await response.json().catch(() => null)) as (CreateEmployeeResult & EdgeFunctionErrorPayload) | null;
 
   const unauthorizedMessage = (payload?.error || payload?.message || '').toLowerCase();
   const shouldRetryWithRefresh = response.status === 401 && unauthorizedMessage.includes('invalid jwt');
@@ -128,10 +130,22 @@ export const createEmployeeRecord = async (
   if (shouldRetryWithRefresh) {
     accessToken = await getFreshAccessToken();
     response = await executeCreate(accessToken);
-    payload = (await response.json().catch(() => null)) as CreateEmployeeResult & { error?: string; message?: string } | null;
+    payload = (await response.json().catch(() => null)) as (CreateEmployeeResult & EdgeFunctionErrorPayload) | null;
   }
 
   if (!response.ok) {
+    if (response.status === 409) {
+      if (payload?.code === 'DUPLICATE_WORK_EMAIL') {
+        throw new Error(payload.error || 'Work email already exists. Please choose a different work email and try again.');
+      }
+
+      if (payload?.code === 'DUPLICATE_PERSONAL_EMAIL') {
+        throw new Error(payload.error || 'Personal email already exists. Please choose a different personal email and try again.');
+      }
+
+      throw new Error(payload?.error || payload?.message || 'A duplicate value was found while creating the employee. Please update email fields and try again.');
+    }
+
     if (response.status === 401) {
       throw new Error(payload?.error || payload?.message || 'Unauthorized while calling employee-create. Please sign out and sign in again to refresh your Supabase session.');
     }

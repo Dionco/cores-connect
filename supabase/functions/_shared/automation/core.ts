@@ -198,6 +198,8 @@ export const triggerProvisioningForEmployee = async (
     metadata: {
       source,
       workflow: provider.workflowName,
+      selectedMailboxes: options?.selectedMailboxes,
+      selectedGroupIds: options?.selectedGroupIds,
     },
   });
 
@@ -229,7 +231,7 @@ export const retryProvisioningJob = async (
 ): Promise<RetryResult> => {
   const { data: job, error: jobError } = await admin
     .from('provisioning_jobs')
-    .select('id, employee_id, service, status, retry_count, idempotency_key')
+    .select('id, employee_id, service, status, retry_count, idempotency_key, metadata')
     .eq('id', jobId)
     .maybeSingle<ProvisioningJobRow>();
 
@@ -280,6 +282,10 @@ export const retryProvisioningJob = async (
     jobId,
     employee,
     service: job.service,
+    options: {
+      selectedMailboxes: job.metadata?.selectedMailboxes,
+      selectedGroupIds: job.metadata?.selectedGroupIds,
+    },
     retryCount,
   });
 

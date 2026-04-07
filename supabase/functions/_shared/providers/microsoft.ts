@@ -52,8 +52,8 @@ const GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
 const GRAPH_BETA_BASE_URL = 'https://graph.microsoft.com/beta';
 const EXO_BASE_URL = 'https://outlook.office365.com/adminapi/beta';
 const EXO_TIMEOUT_MS = Number(Deno.env.get('MS_EXO_REQUEST_TIMEOUT_MS') || 20_000);
-const EXO_MAX_ATTEMPTS = Number(Deno.env.get('MS_EXO_MAX_ATTEMPTS') || 3);
-const EXO_BASE_RETRY_DELAY_MS = Number(Deno.env.get('MS_EXO_BASE_RETRY_DELAY_MS') || 1_000);
+const EXO_MAX_ATTEMPTS = Number(Deno.env.get('MS_EXO_MAX_ATTEMPTS') || 6);
+const EXO_BASE_RETRY_DELAY_MS = Number(Deno.env.get('MS_EXO_BASE_RETRY_DELAY_MS') || 2_000);
 
 const slugifyName = (value: string): string =>
   value
@@ -126,9 +126,18 @@ const readGraphError = async (response: Response): Promise<string> => {
       return fallback;
     }
 
-    const payload = JSON.parse(raw) as { error?: { message?: string }; message?: string };
+    const payload = JSON.parse(raw) as {
+      error?: { message?: string; details?: unknown; innererror?: unknown };
+      message?: string;
+      details?: unknown;
+    };
     const message = payload?.error?.message || payload?.message;
     if (message) {
+      // EXO cmdlet APIs often return generic messages with useful diagnostics in nested details.
+      const details = payload?.error?.details ?? payload?.details ?? payload?.error?.innererror;
+      if (details) {
+        return `${message} | details: ${JSON.stringify(details)}`;
+      }
       return message;
     }
 
@@ -145,6 +154,21 @@ const sleep = (ms: number): Promise<void> =>
 
 const isTransientExoStatus = (status: number): boolean =>
   [408, 425, 429, 500, 502, 503, 504].includes(status);
+
+const isTransientExoCmdletNotReadyError = (status: number, message: string): boolean => {
+  if (status !== 404) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('error executing cmdlet')
+    || normalized.includes('couldn\'t be found')
+    || normalized.includes('cannot find')
+    || normalized.includes('was not found')
+    || normalized.includes('object not found')
+  );
+};
 
 const computeRetryDelayMs = (attempt: number): number => {
   const exponential = EXO_BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
@@ -454,7 +478,7 @@ const addUserToSharedMailbox = async (
       return { status: 'already-member', attempts: attempt, latencyMs: elapsedMs };
     }
 
-    const transient = isTransientExoStatus(response.status);
+    const transient = isTransientExoStatus(response.status) || isTransientExoCmdletNotReadyError(response.status, errorMessage);
     if (transient && attempt < EXO_MAX_ATTEMPTS) {
       await sleep(computeRetryDelayMs(attempt));
       continue;
@@ -662,22 +686,36 @@ const addUserToSecurityGroups = async (
   accessToken: string,
   userId: string,
   groupIds: string[],
-): Promise<Array<{ step: string; status: 'done' | 'pending' | 'error'; timestamp: string }>> => {
+): Promise<{
+  logs: Array<{ step: string; status: 'done' | 'pending' | 'error'; timestamp: string }>;
+  errors: string[];
+}> => {
   const logs: Array<{ step: string; status: 'done' | 'pending' | 'error'; timestamp: string }> = [];
+  const errors: string[] = [];
 
   for (const groupId of groupIds) {
-    const membership = await addUserToGroup(accessToken, userId, groupId);
-    logs.push({
-      step:
-        membership === 'added'
-          ? `Added user to security group ${groupId}`
-          : `User already in security group ${groupId}`,
-      status: 'done',
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      const membership = await addUserToGroup(accessToken, userId, groupId);
+      logs.push({
+        step:
+          membership === 'added'
+            ? `Added user to security group ${groupId}`
+            : `User already in security group ${groupId}`,
+        status: 'done',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Failed to add user to security group ${groupId}`;
+      errors.push(message);
+      logs.push({
+        step: message,
+        status: 'error',
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
-  return logs;
+  return { logs, errors };
 };
 
 export const microsoftProvider: ProvisioningProvider = {
@@ -685,6 +723,21 @@ export const microsoftProvider: ProvisioningProvider = {
   workflowName: 'm365-onboarding-v1',
   run: async (employee: EmployeeRow, options?: ProvisioningOptions) => {
     const config = getConfig();
+
+    // Log configuration for debugging
+    console.log('[M365 Provider] Starting provisioning', {
+      employeeId: employee.id,
+      employeeName: `${employee.first_name} ${employee.last_name}`,
+      department: employee.department,
+      hasOptions: !!options,
+      selectedMailboxesCount: options?.selectedMailboxes?.length || 0,
+      selectedGroupIdsCount: options?.selectedGroupIds?.length || 0,
+      configuredMailboxes: {
+        trading: config.sharedMailboxes.trading,
+        byDepartment: config.sharedMailboxes.byDepartment[employee.department],
+      },
+      securityGroupCount: config.securityGroupIds.length,
+    });
 
     // Graph token — used for user creation, licence assignment, and M365 Group membership.
     const graphToken = await getAccessToken(config, 'https://graph.microsoft.com/.default');
@@ -694,6 +747,7 @@ export const microsoftProvider: ProvisioningProvider = {
     const exoToken = await getAccessToken(config, 'https://outlook.office365.com/.default');
 
     const logs: Array<{ step: string; status: 'done' | 'pending' | 'error'; timestamp: string }> = [];
+    const nonFatalErrors: string[] = [];
 
     const { user, reused } = await createOrReuseUser(graphToken, config, employee);
     logs.push({
@@ -740,22 +794,43 @@ export const microsoftProvider: ProvisioningProvider = {
       : configuredMailboxTargets;
     const uniqueMailboxTargets = [...new Set(mailboxTargets.map((mailbox) => mailbox.trim()).filter(Boolean))];
 
+    console.log('[M365 Provider] Mailbox assignment details', {
+      manualSelectionProvided: manualMailboxSelectionProvided,
+      configuredTargets: configuredMailboxTargets,
+      selectedMailboxes: options?.selectedMailboxes,
+      uniqueTargets: uniqueMailboxTargets,
+      targetCount: uniqueMailboxTargets.length,
+    });
+
     if (uniqueMailboxTargets.length > 0) {
       for (const mailboxEmail of uniqueMailboxTargets) {
-        const mailboxResult = await addUserToSharedMailbox(
-          exoToken,
-          config.tenantId,
-          mailboxEmail,
-          user.userPrincipalName,
-        );
-        logs.push({
-          step:
-            mailboxResult.status === 'added'
-              ? `Granted FullAccess on shared mailbox ${mailboxEmail} (attempts: ${mailboxResult.attempts}; latencyMs: ${mailboxResult.latencyMs})`
-              : `User already has FullAccess on shared mailbox ${mailboxEmail} (attempts: ${mailboxResult.attempts}; latencyMs: ${mailboxResult.latencyMs})`,
-          status: 'done',
-          timestamp: new Date().toISOString(),
-        });
+        console.log('[M365 Provider] Attempting mailbox assignment', { mailboxEmail, userUpn: user.userPrincipalName });
+        try {
+          const mailboxResult = await addUserToSharedMailbox(
+            exoToken,
+            config.tenantId,
+            mailboxEmail,
+            user.userPrincipalName,
+          );
+          console.log('[M365 Provider] Mailbox assignment succeeded', { mailboxEmail, ...mailboxResult });
+          logs.push({
+            step:
+              mailboxResult.status === 'added'
+                ? `Granted FullAccess on shared mailbox ${mailboxEmail} (attempts: ${mailboxResult.attempts}; latencyMs: ${mailboxResult.latencyMs})`
+                : `User already has FullAccess on shared mailbox ${mailboxEmail} (attempts: ${mailboxResult.attempts}; latencyMs: ${mailboxResult.latencyMs})`,
+            status: 'done',
+            timestamp: new Date().toISOString(),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : `Failed mailbox assignment for ${mailboxEmail}`;
+          console.error('[M365 Provider] Mailbox assignment failed', { mailboxEmail, error: message });
+          nonFatalErrors.push(message);
+          logs.push({
+            step: `Shared mailbox assignment failed for ${mailboxEmail}: ${message}`,
+            status: 'error',
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
     } else {
       logs.push({
@@ -768,15 +843,25 @@ export const microsoftProvider: ProvisioningProvider = {
     }
 
     if (config.defaultGroupId) {
-      const membership = await addUserToGroup(graphToken, user.id, config.defaultGroupId);
-      logs.push({
-        step:
-          membership === 'added'
-            ? 'Added user to Cores SharePoint site (cores_algemeen)'
-            : 'User already in Cores SharePoint site (cores_algemeen)',
-        status: 'done',
-        timestamp: new Date().toISOString(),
-      });
+      try {
+        const membership = await addUserToGroup(graphToken, user.id, config.defaultGroupId);
+        logs.push({
+          step:
+            membership === 'added'
+              ? 'Added user to Cores SharePoint site (cores_algemeen)'
+              : 'User already in Cores SharePoint site (cores_algemeen)',
+          status: 'done',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Default SharePoint group assignment failed';
+        nonFatalErrors.push(message);
+        logs.push({
+          step: `Default SharePoint group assignment failed: ${message}`,
+          status: 'error',
+          timestamp: new Date().toISOString(),
+        });
+      }
     } else {
       logs.push({
         step: 'Skipped default SharePoint group assignment (MS_GRAPH_DEFAULT_GROUP_ID not configured)',
@@ -786,15 +871,25 @@ export const microsoftProvider: ProvisioningProvider = {
     }
 
     if (config.defaultSiteId) {
-      const siteFavorited = await favoriteSharePointSite(graphToken, user.id, config.defaultSiteId);
-      logs.push({
-        step:
-          siteFavorited === 'added'
-            ? 'Favorited default SharePoint site'
-            : 'SharePoint site already favorited',
-        status: 'done',
-        timestamp: new Date().toISOString(),
-      });
+      try {
+        const siteFavorited = await favoriteSharePointSite(graphToken, user.id, config.defaultSiteId);
+        logs.push({
+          step:
+            siteFavorited === 'added'
+              ? 'Favorited default SharePoint site'
+              : 'SharePoint site already favorited',
+          status: 'done',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'SharePoint site favoriting failed';
+        nonFatalErrors.push(message);
+        logs.push({
+          step: `SharePoint site favoriting failed: ${message}`,
+          status: 'error',
+          timestamp: new Date().toISOString(),
+        });
+      }
     } else {
       logs.push({
         step: 'Skipped SharePoint site favoriting (MS_GRAPH_DEFAULT_SITE_ID not configured)',
@@ -809,8 +904,9 @@ export const microsoftProvider: ProvisioningProvider = {
       : config.securityGroupIds;
 
     if (securityGroupIds.length > 0) {
-      const sgLogs = await addUserToSecurityGroups(graphToken, user.id, securityGroupIds);
-      logs.push(...sgLogs);
+      const sgResult = await addUserToSecurityGroups(graphToken, user.id, securityGroupIds);
+      logs.push(...sgResult.logs);
+      nonFatalErrors.push(...sgResult.errors);
     } else {
       logs.push({
         step: manualSecurityGroupsProvided
@@ -819,6 +915,16 @@ export const microsoftProvider: ProvisioningProvider = {
         status: 'done',
         timestamp: new Date().toISOString(),
       });
+    }
+
+    console.log('[M365 Provider] Provisioning completed', {
+      successCount: logs.filter(l => l.status === 'done').length,
+      errorCount: logs.filter(l => l.status === 'error').length,
+      nonFatalErrorsCount: nonFatalErrors.length,
+    });
+
+    if (nonFatalErrors.length > 0) {
+      throw new Error(`Provisioning completed with assignment errors: ${nonFatalErrors.join(' | ')}`);
     }
 
     return logs;

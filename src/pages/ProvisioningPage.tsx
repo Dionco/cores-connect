@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { mockProvisioningJobs } from '@/data/mockData';
 import { retryProvisioningAutomation } from '@/lib/automation/client';
+import { analyzeProvisioningLogs } from '@/lib/provisioning/logAnalyzer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { CheckCircle2, Clock, AlertCircle, Zap, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Zap, RotateCcw, Mail, Shield, AlertTriangle } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import { createAppNotification } from '@/lib/notifications';
 import { toast } from '@/hooks/use-toast';
@@ -16,6 +17,10 @@ const ProvisioningPage = () => {
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const job = mockProvisioningJobs.find(j => j.id === selectedJob);
+  
+  const logSummary = useMemo(() => {
+    return job ? analyzeProvisioningLogs(job) : null;
+  }, [job]);
 
   const handleRetry = async (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
@@ -103,30 +108,124 @@ const ProvisioningPage = () => {
 
       {/* Detail drawer */}
       <Sheet open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <SheetContent className="sm:max-w-md">
+        <SheetContent className="sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{t('provisioning.log')}</SheetTitle>
           </SheetHeader>
-          {job && (
-            <div className="mt-4 space-y-4">
-              <div className="space-y-1 text-sm">
-                <p><span className="text-muted-foreground">{t('provisioning.employee')}:</span> <span className="font-medium">{job.employeeName}</span></p>
-                <p><span className="text-muted-foreground">{t('provisioning.service')}:</span> <span className="font-medium">{job.service}</span></p>
-                <p><span className="text-muted-foreground">{t('employees.status')}:</span> <StatusBadge status={job.status} /></p>
+          {job && logSummary && (
+            <div className="mt-4 space-y-6">
+              {/* Header Info */}
+              <div className="space-y-2 border-b pb-4">
+                <div className="space-y-1 text-sm">
+                  <p><span className="text-muted-foreground">{t('provisioning.employee')}:</span> <span className="font-medium">{job.employeeName}</span></p>
+                  <p><span className="text-muted-foreground">{t('provisioning.service')}:</span> <span className="font-medium">{job.service}</span></p>
+                  <p><span className="text-muted-foreground">{t('employees.status')}:</span> <StatusBadge status={job.status} /></p>
+                </div>
               </div>
-              <div className="space-y-2">
-                {job.logs.map((log, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
-                    {log.status === 'done' && <CheckCircle2 size={16} className="mt-0.5 text-emerald-500 shrink-0" />}
-                    {log.status === 'pending' && <Clock size={16} className="mt-0.5 text-cores-orange shrink-0" />}
-                    {log.status === 'error' && <AlertCircle size={16} className="mt-0.5 text-destructive shrink-0" />}
-                    <div>
-                      <p className="text-sm font-medium">{log.step}</p>
-                      {log.timestamp && <p className="text-xs text-muted-foreground">{log.timestamp}</p>}
+
+              {/* Summary Section */}
+              {(logSummary.mailboxResults.succeeded.length > 0 || logSummary.mailboxResults.failed.length > 0 || logSummary.groupResults.succeeded.length > 0 || logSummary.groupResults.failed.length > 0) && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm">Provisioning Summary</h3>
+                  
+                  {/* Mailbox Results */}
+                  {logSummary.mailboxResults.succeeded.length > 0 && (
+                    <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-emerald-600" />
+                        <p className="text-sm font-medium text-emerald-900">Shared Mailboxes Added ({logSummary.mailboxResults.succeeded.length})</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {logSummary.mailboxResults.succeeded.map((email) => (
+                          <li key={email} className="text-xs text-emerald-800 flex items-center gap-2">
+                            <Mail size={12} /> {email}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
-                ))}
+                  )}
+
+                  {logSummary.mailboxResults.failed.length > 0 && (
+                    <div className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle size={16} className="text-destructive" />
+                        <p className="text-sm font-medium text-destructive">Shared Mailbox Failures ({logSummary.mailboxResults.failed.length})</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {logSummary.mailboxResults.failed.map((result) => (
+                          <li key={result.email} className="text-xs text-destructive flex flex-col gap-1 p-2 rounded bg-destructive/10">
+                            <span className="font-medium flex items-center gap-2"><Mail size={12} /> {result.email}</span>
+                            <span className="text-destructive/80">{result.error}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Security Group Results */}
+                  {logSummary.groupResults.succeeded.length > 0 && (
+                    <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-emerald-600" />
+                        <p className="text-sm font-medium text-emerald-900">Security Groups Added ({logSummary.groupResults.succeeded.length})</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {logSummary.groupResults.succeeded.map((id) => (
+                          <li key={id} className="text-xs text-emerald-800 flex items-center gap-2">
+                            <Shield size={12} /> {id}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {logSummary.groupResults.failed.length > 0 && (
+                    <div className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle size={16} className="text-destructive" />
+                        <p className="text-sm font-medium text-destructive">Security Group Failures ({logSummary.groupResults.failed.length})</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {logSummary.groupResults.failed.map((result) => (
+                          <li key={result.id} className="text-xs text-destructive flex flex-col gap-1 p-2 rounded bg-destructive/10">
+                            <span className="font-medium flex items-center gap-2"><Shield size={12} /> {result.id}</span>
+                            <span className="text-destructive/80">{result.error}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full Details Logs */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm">Full Execution Log</h3>
+                <div className="space-y-2">
+                  {job.logs.map((log, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg border p-3 text-xs">
+                      {log.status === 'done' && <CheckCircle2 size={16} className="mt-0.5 text-emerald-500 shrink-0 flex-none" />}
+                      {log.status === 'pending' && <Clock size={16} className="mt-0.5 text-cores-orange shrink-0 flex-none" />}
+                      {log.status === 'error' && <AlertCircle size={16} className="mt-0.5 text-destructive shrink-0 flex-none" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm break-words">{log.step}</p>
+                        {log.timestamp && <p className="text-xs text-muted-foreground mt-1">{log.timestamp}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* Error Banner if Failed */}
+              {job.status === 'Failed' && (
+                <div className="flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+                  <AlertTriangle size={18} className="mt-0.5 text-destructive shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-destructive">Provisioning Failed</p>
+                    <p className="text-xs text-destructive/80 mt-1">Click the Retry button above to attempt provisioning again.</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>

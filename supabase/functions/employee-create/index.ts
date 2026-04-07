@@ -25,6 +25,11 @@ interface CreateEmployeeRequest {
   personalPhone?: string;
 }
 
+interface PostgresLikeError {
+  code?: string;
+  message?: string;
+}
+
 const VALID_DEPARTMENTS = new Set(['Sales', 'Customs & Compliance', 'Transport']);
 const VALID_CONTRACT_TYPES = new Set(['Permanent', 'Intern', 'Freelance']);
 
@@ -56,6 +61,48 @@ const requiredTrimmed = (value: string | undefined, field: string): string => {
 const optionalTrimmedOrNull = (value: string | undefined): string | null => {
   const trimmed = value?.trim() || '';
   return trimmed ? trimmed : null;
+};
+
+const optionalNormalizedEmailOrNull = (value: string | undefined): string | null => {
+  const trimmed = value?.trim() || '';
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.toLowerCase();
+};
+
+const toConflictResponse = (
+  error: PostgresLikeError,
+  workEmail: string | null,
+  personalEmail: string | null,
+): Response => {
+  const message = error.message || 'Unique constraint violation';
+
+  if (message.includes('uq_employees_email_lower_not_blank')) {
+    return jsonResponse(409, {
+      code: 'DUPLICATE_WORK_EMAIL',
+      field: 'workEmail',
+      error: workEmail
+        ? `Work email already exists: ${workEmail}. Please choose a different work email.`
+        : 'Work email already exists. Please choose a different work email.',
+    });
+  }
+
+  if (message.includes('uq_employees_personal_email_lower_not_blank')) {
+    return jsonResponse(409, {
+      code: 'DUPLICATE_PERSONAL_EMAIL',
+      field: 'personalEmail',
+      error: personalEmail
+        ? `Personal email already exists: ${personalEmail}. Please choose a different personal email.`
+        : 'Personal email already exists. Please choose a different personal email.',
+    });
+  }
+
+  return jsonResponse(409, {
+    code: 'UNIQUE_CONSTRAINT_VIOLATION',
+    error: 'A record with one of the provided unique values already exists.',
+  });
 };
 
 const validateStartDate = (value: string | undefined): string => {
@@ -124,7 +171,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const employeeId = `emp-${crypto.randomUUID().slice(0, 8)}`;
-    const email = optionalTrimmedOrNull(payload.workEmail);
+    const email = optionalNormalizedEmailOrNull(payload.workEmail);
+    const personalEmail = optionalNormalizedEmailOrNull(payload.personalEmail);
 
     const admin = createAdminClient();
 
@@ -133,7 +181,7 @@ Deno.serve(async (req: Request) => {
       first_name: firstName,
       last_name: lastName,
       email,
-      personal_email: optionalTrimmedOrNull(payload.personalEmail),
+      personal_email: personalEmail,
       role,
       department,
       start_date: startDate,
@@ -147,7 +195,11 @@ Deno.serve(async (req: Request) => {
 
     if (error) {
       const conflict = error.code === '23505';
-      return jsonResponse(conflict ? 409 : 500, { error: error.message });
+      if (conflict) {
+        return toConflictResponse(error, email, personalEmail);
+      }
+
+      return jsonResponse(500, { error: error.message });
     }
 
     return jsonResponse(200, {

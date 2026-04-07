@@ -27,6 +27,27 @@ const jsonResponse = (status: number, body: Record<string, unknown>) =>
     },
   });
 
+const getAuthenticatedUserId = async (req: Request): Promise<string | null> => {
+  const authHeader = req.headers.get('Authorization');
+
+  if (!authHeader) {
+    return null;
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return null;
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) {
+    return null;
+  }
+
+  return data.user.id;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -37,6 +58,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) {
+      return jsonResponse(401, { error: 'Authentication required' });
+    }
+
     const admin = createAdminClient();
     const payload = (await req.json()) as TriggerRequest;
     const employeeId = payload.employeeId;

@@ -448,16 +448,28 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
 
       {!isResourcesLoading && resourcesError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-          <p>{resourcesError}</p>
+          <div className="font-semibold mb-2">Failed to load shared mailboxes</div>
+          <p className="text-xs mb-2">{resourcesError}</p>
+          <p className="text-xs text-destructive/80 mb-3">
+            This may indicate that the Microsoft Graph API is misconfigured or lacks the necessary permissions (Exchange.ManageAsApp).
+          </p>
           <Button variant="outline" size="sm" className="mt-2" onClick={() => void loadGraphResources()}>
-            Retry
+            Retry Loading
           </Button>
         </div>
       )}
 
       {!isResourcesLoading && !resourcesError && availableMailboxes.length === 0 && (
         <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-          No shared mailboxes available.
+          <div className="font-semibold mb-2">No shared mailboxes available</div>
+          <p className="text-xs">
+            No shared mailboxes were found. This could mean:
+          </p>
+          <ul className="text-xs list-disc list-inside mt-2 space-y-1">
+            <li>No shared mailboxes exist in your organization</li>
+            <li>The configured mailboxes (MS_EXO_SHARED_MAILBOX_* env vars) are not found</li>
+            <li>The API permissions or configuration needs adjustment</li>
+          </ul>
         </div>
       )}
 
@@ -695,11 +707,55 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
               </p>
             </div>
 
-            <div className="space-y-3 rounded-lg border p-4 text-sm">
-              <p><span className="font-semibold">Employee:</span> {firstName} {lastName}</p>
-              <p><span className="font-semibold">Mailboxes assigned:</span> {selectedMailboxLabels.length || 'None'}</p>
-              <p><span className="font-semibold">Groups assigned:</span> {selectedGroupLabels.length || 'None'}</p>
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="text-sm">
+                <div className="flex justify-between gap-4 py-2 border-b">
+                  <span className="font-semibold">Employee</span>
+                  <span>{firstName} {lastName}</span>
+                </div>
+                <div className="flex justify-between gap-4 py-2 border-b">
+                  <span className="font-semibold">Department</span>
+                  <span>{department}</span>
+                </div>
+                <div className="flex justify-between gap-4 py-2 border-b">
+                  <span className="font-semibold">Status</span>
+                  <span className="text-emerald-600 font-medium">✓ Provisioned</span>
+                </div>
+              </div>
             </div>
+
+            {selectedMailboxLabels.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Mail className="text-emerald-600" size={16} />
+                  <p className="text-sm font-semibold text-emerald-900">Shared Mailboxes</p>
+                </div>
+                <ul className="space-y-1">
+                  {selectedMailboxLabels.map((mailbox) => (
+                    <li key={mailbox.key} className="text-xs text-emerald-800">✓ {mailbox.label}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {selectedGroupLabels.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="text-emerald-600" size={16} />
+                  <p className="text-sm font-semibold text-emerald-900">Security Groups</p>
+                </div>
+                <ul className="space-y-1">
+                  {selectedGroupLabels.map((group) => (
+                    <li key={group.key} className="text-xs text-emerald-800">✓ {group.label}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/30">
+              The provisioning process runs in the background. Check the{' '}
+              <a href="/provisioning" className="font-semibold underline">Provisioning page</a> for detailed logs and to monitor completion.
+            </p>
 
             <Button className="w-full" onClick={closeAndReset}>Done</Button>
           </div>

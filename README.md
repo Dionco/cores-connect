@@ -64,11 +64,8 @@ The onboarding automation edge functions can now call Microsoft Graph for M365 p
 - Client Secret
 - Default domain (example: `contoso.onmicrosoft.com`)
 - Business Premium SKU ID (optional but recommended)
-- Group IDs for default and department-specific access (optional)
-
-If shared mailbox access is already granted via your default all-users group, leave
-the `MS_GRAPH_SHARED_MAILBOX_GROUP_*` secrets unset. The automation will still add new
-users to `MS_GRAPH_DEFAULT_GROUP_ID` and skip mailbox-specific group assignments.
+- Default SharePoint/M365 group ID (optional)
+- Shared mailbox addresses for trading and departments
 
 Set Supabase edge secrets (replace values):
 
@@ -81,14 +78,19 @@ supabase secrets set \
 	MS_GRAPH_USAGE_LOCATION="NL" \
 	MS_GRAPH_BUSINESS_PREMIUM_SKU_ID="<sku-guid>" \
 	MS_GRAPH_DEFAULT_GROUP_ID="<default-group-guid>" \
-	MS_GRAPH_SHARED_MAILBOX_GROUP_TRADING="<trading-group-guid>" \
-	MS_GRAPH_SHARED_MAILBOX_GROUP_SALES="<sales-group-guid>" \
-	MS_GRAPH_SHARED_MAILBOX_GROUP_CUSTOMS="<customs-group-guid>" \
-	MS_GRAPH_SHARED_MAILBOX_GROUP_TRANSPORT="<transport-group-guid>"
+	MS_EXO_SHARED_MAILBOX_TRADING="trading@<tenant-domain>" \
+	MS_EXO_SHARED_MAILBOX_SALES="sales@<tenant-domain>" \
+	MS_EXO_SHARED_MAILBOX_CUSTOMS="customs@<tenant-domain>" \
+	MS_EXO_SHARED_MAILBOX_TRANSPORT="transport@<tenant-domain>"
 ```
 
 Optional secret:
 - `MS_GRAPH_INITIAL_PASSWORD` to force a fixed initial password during account creation (if omitted, a random password is generated).
+
+Optional reliability tuning secrets:
+- `MS_EXO_REQUEST_TIMEOUT_MS` (default `20000`)
+- `MS_EXO_MAX_ATTEMPTS` (default `3`)
+- `MS_EXO_BASE_RETRY_DELAY_MS` (default `1000`)
 
 Deploy functions:
 
@@ -111,10 +113,13 @@ curl -sS -X POST "${VITE_SUPABASE_URL}/functions/v1/graph-health-check" \
 Expected response:
 - `ok: true`
 - token check passes
+- Exchange Online token check passes
 - configured SKU check passes (or is explicitly skipped)
+- shared mailbox format checks are valid
 - configured group IDs are all found
 
 Smoke test from app:
 1. Open onboarding page and trigger `Start M365 automation`.
 2. Confirm `provisioning_jobs` and `provisioning_job_logs` rows are created and updated.
 3. If a job fails, trigger retry from provisioning page.
+4. Retry is capped at 3 attempts per job. Additional retries return a conflict response.

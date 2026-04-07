@@ -17,6 +17,12 @@ export interface ProvisioningJobRow {
   status: JobStatus;
   retry_count: number;
   idempotency_key: string | null;
+  metadata?: {
+    source?: 'manual-ui-trigger' | 'retry-endpoint';
+    workflow?: string;
+    selectedMailboxes?: string[];
+    selectedGroupIds?: string[];
+  } | null;
 }
 
 export interface ProvisioningStep {
