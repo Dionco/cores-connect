@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees, departments, type Department, type EmployeeStatus } from '@/data/mockData';
+import { departments, type EmployeeStatus } from '@/data/mockData';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -19,8 +20,9 @@ const EmployeesPage = () => {
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const { employees } = useEmployees();
 
-  const filtered = mockEmployees.filter((emp) => {
+  const filtered = employees.filter((emp) => {
     const matchSearch = `${emp.firstName} ${emp.lastName} ${emp.role}`
       .toLowerCase()
       .includes(search.toLowerCase());

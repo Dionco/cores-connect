@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees } from '@/data/mockData';
+import { useEmployees } from '@/hooks/useEmployees';
 import { triggerOnboardingAutomation } from '@/lib/automation/client';
 import { createAppNotification } from '@/lib/notifications';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,8 +14,9 @@ const OnboardingPage = () => {
   const { t } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isTriggering, setIsTriggering] = useState(false);
+  const { employees } = useEmployees();
 
-  const onboardingEmployees = mockEmployees.filter(e => e.status === 'Onboarding');
+  const onboardingEmployees = employees.filter(e => e.status === 'Onboarding');
   const selected = onboardingEmployees.find(e => e.id === selectedId);
 
   const handleStartM365Automation = async () => {

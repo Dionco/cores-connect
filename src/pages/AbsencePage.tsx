@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees, mockLeaveBalances, mockLeaveRequests, LeaveRequest, LeaveType, LeaveStatus } from '@/data/mockData';
+import { LeaveStatus, LeaveType } from '@/data/mockData';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useLeaveManagement } from '@/hooks/useLeaveManagement';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -9,20 +11,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import StatusBadge from '@/components/StatusBadge';
+import { useAuth } from '@/contexts/AuthContext';
 import { CalendarDays, CalendarIcon, Check, Clock, Plus, Umbrella, X, Baby, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO, isSameMonth, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns';
+import { enUS, nl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { createAppNotification } from '@/lib/notifications';
 import { useToast } from '@/hooks/use-toast';
 
-const CURRENT_USER_ID = 'emp-001'; // Simulated logged-in user
-
 const AbsencePage = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(mockLeaveRequests);
-  const [balances, setBalances] = useState(mockLeaveBalances);
+  const { employees } = useEmployees();
+  const {
+    leaveRequests,
+    balances,
+    isLoading: isLeaveLoading,
+    isMutating: isLeaveMutating,
+    submitLeaveRequest,
+    approveLeaveRequest,
+    rejectLeaveRequest,
+  } = useLeaveManagement();
+
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
 
@@ -30,15 +41,72 @@ const AbsencePage = () => {
   const [formLeaveType, setFormLeaveType] = useState<LeaveType>('Vacation');
   const [formStartDate, setFormStartDate] = useState<Date>();
   const [formEndDate, setFormEndDate] = useState<Date>();
-  const [formSubstitute, setFormSubstitute] = useState<string>('');
+  const [formSubstitute, setFormSubstitute] = useState<string>('none');
 
-  const myBalance = balances.find(b => b.userId === CURRENT_USER_ID);
-  const myRequests = leaveRequests.filter(r => r.userId === CURRENT_USER_ID);
-  const pendingRequests = leaveRequests.filter(r => r.status === 'Pending');
-  const approvedRequests = leaveRequests.filter(r => r.status === 'Approved');
+  const dateLocale = language === 'nl' ? nl : enUS;
+  const calendarWeekdayLabels = [
+    t('absence.weekdayMon'),
+    t('absence.weekdayTue'),
+    t('absence.weekdayWed'),
+    t('absence.weekdayThu'),
+    t('absence.weekdayFri'),
+    t('absence.weekdaySat'),
+    t('absence.weekdaySun'),
+  ];
 
-  const activeEmployees = mockEmployees.filter(e => e.status === 'Active' || e.status === 'Onboarding');
-  const otherEmployees = activeEmployees.filter(e => e.id !== CURRENT_USER_ID);
+  const employeeMap = useMemo(() => {
+    return new Map(employees.map((employee) => [employee.id, employee]));
+  }, [employees]);
+
+  const currentUserId = useMemo(() => {
+    const email = user?.email?.trim().toLowerCase();
+    if (!email) {
+      return null;
+    }
+
+    const match = employees.find((employee) => employee.email?.trim().toLowerCase() === email);
+    return match?.id || null;
+  }, [employees, user?.email]);
+
+  const noLinkedEmployee = Boolean(user?.email) && !currentUserId;
+
+  const myBalance = useMemo(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+    return balances.find((balance) => balance.userId === currentUserId);
+  }, [balances, currentUserId]);
+
+  const myRequests = useMemo(() => {
+    if (!currentUserId) {
+      return [];
+    }
+    return leaveRequests.filter((request) => request.userId === currentUserId);
+  }, [leaveRequests, currentUserId]);
+
+  const pendingRequests = useMemo(() => {
+    return leaveRequests.filter((request) => request.status === 'Pending');
+  }, [leaveRequests]);
+
+  const approvedRequests = useMemo(() => {
+    return leaveRequests.filter((request) => request.status === 'Approved');
+  }, [leaveRequests]);
+
+  const approvedRequestIntervals = useMemo(() => {
+    return approvedRequests.map((request) => ({
+      request,
+      start: parseISO(request.startDate),
+      end: parseISO(request.endDate),
+    }));
+  }, [approvedRequests]);
+
+  const activeEmployees = useMemo(() => {
+    return employees.filter((employee) => employee.status === 'Active' || employee.status === 'Onboarding');
+  }, [employees]);
+
+  const otherEmployees = useMemo(() => {
+    return activeEmployees.filter((employee) => employee.id !== currentUserId);
+  }, [activeEmployees, currentUserId]);
 
   const leaveTypeIcon = (type: LeaveType) => {
     switch (type) {
@@ -89,92 +157,147 @@ const AbsencePage = () => {
   };
 
   const calculateDays = (start: Date, end: Date) => {
+    if (end < start) {
+      return 0;
+    }
     const days = eachDayOfInterval({ start, end });
     return days.filter(d => d.getDay() !== 0 && d.getDay() !== 6).length;
   };
 
-  const handleSubmitRequest = () => {
-    if (!formStartDate || !formEndDate) return;
-    const days = calculateDays(formStartDate, formEndDate);
-    const emp = mockEmployees.find(e => e.id === CURRENT_USER_ID)!;
-    const newRequest: LeaveRequest = {
-      id: `lr-${Date.now()}`,
-      userId: CURRENT_USER_ID,
-      employeeName: `${emp.firstName} ${emp.lastName}`,
-      leaveType: formLeaveType,
-      startDate: format(formStartDate, 'yyyy-MM-dd'),
-      endDate: format(formEndDate, 'yyyy-MM-dd'),
-      substituteUserId: formSubstitute || undefined,
-      status: 'Pending',
-      createdAt: format(new Date(), 'yyyy-MM-dd'),
-      days,
-    };
-    setLeaveRequests(prev => [newRequest, ...prev]);
-    if (myBalance) {
-      setBalances(prev => prev.map(b => b.userId === CURRENT_USER_ID
-        ? { ...b, pendingDays: b.pendingDays + days, remainingDays: b.remainingDays - days }
-        : b
-      ));
+  const formatDateValue = (value: string) => {
+    try {
+      return format(parseISO(value), 'PPP', { locale: dateLocale });
+    } catch {
+      return value;
     }
-    setShowRequestModal(false);
-    setFormStartDate(undefined);
-    setFormEndDate(undefined);
-    setFormSubstitute('');
-    setFormLeaveType('Vacation');
-    toast({ title: t('absence.requestSubmitted') });
-
-    void createAppNotification({
-      title: 'Leave request submitted',
-      description: `${newRequest.employeeName} requested ${days} day(s) of leave.`,
-      type: 'info',
-      link: '/absence',
-      payload: { requestId: newRequest.id },
-    });
   };
 
-  const handleApprove = (requestId: string) => {
-    const request = leaveRequests.find((item) => item.id === requestId);
-    setLeaveRequests(prev => prev.map(r => {
-      if (r.id !== requestId) return r;
-      setBalances(bs => bs.map(b => b.userId === r.userId
-        ? { ...b, pendingDays: b.pendingDays - r.days, usedDays: b.usedDays + r.days }
-        : b
-      ));
-      return { ...r, status: 'Approved' as LeaveStatus };
-    }));
-    toast({ title: t('absence.requestApproved') });
+  const resolveEmployeeName = (userId: string, fallback?: string) => {
+    const employee = employeeMap.get(userId);
+    if (employee) {
+      return `${employee.firstName} ${employee.lastName}`;
+    }
+    return fallback || userId;
+  };
 
-    if (request) {
+  const resolveEmployeeFirstName = (userId: string, fallback?: string) => {
+    const employee = employeeMap.get(userId);
+    if (employee) {
+      return employee.firstName;
+    }
+    if (!fallback) {
+      return userId;
+    }
+    return fallback.split(' ')[0];
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!currentUserId) {
+      toast({ title: t('absence.validationUserNotFound'), variant: 'destructive' });
+      return;
+    }
+
+    if (!formStartDate || !formEndDate) {
+      toast({ title: t('absence.validationDatesRequired'), variant: 'destructive' });
+      return;
+    }
+
+    const days = calculateDays(formStartDate, formEndDate);
+    if (days <= 0) {
+      toast({ title: t('absence.validationNoBusinessDays'), variant: 'destructive' });
+      return;
+    }
+
+    if (myBalance && myBalance.remainingDays < days) {
+      toast({ title: t('absence.validationInsufficientBalance'), variant: 'destructive' });
+      return;
+    }
+
+    const substituteUserId = formSubstitute !== 'none' ? formSubstitute : undefined;
+    const employeeName = resolveEmployeeName(currentUserId);
+
+    try {
+      await submitLeaveRequest({
+        userId: currentUserId,
+        leaveType: formLeaveType,
+        startDate: format(formStartDate, 'yyyy-MM-dd'),
+        endDate: format(formEndDate, 'yyyy-MM-dd'),
+        substituteUserId,
+        days,
+      });
+
+      setShowRequestModal(false);
+      setFormStartDate(undefined);
+      setFormEndDate(undefined);
+      setFormSubstitute('none');
+      setFormLeaveType('Vacation');
+      toast({ title: t('absence.requestSubmitted') });
+
       void createAppNotification({
-        title: 'Leave request approved',
-        description: `${request.employeeName}'s leave request was approved.`,
+        title: t('absence.notificationSubmittedTitle'),
+        description: `${employeeName} - ${days} ${t('absence.daysCount').toLowerCase()}.`,
+        type: 'info',
+        link: '/absence',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('absence.requestSubmitFailed');
+      toast({ title: t('absence.requestSubmitFailed'), description: message, variant: 'destructive' });
+    }
+  };
+
+  const handleApprove = async (requestId: string) => {
+    if (!isAdmin) {
+      toast({ title: t('absence.validationUnauthorized'), variant: 'destructive' });
+      return;
+    }
+
+    const request = leaveRequests.find((item) => item.id === requestId);
+    if (!request) {
+      return;
+    }
+
+    try {
+      await approveLeaveRequest(requestId);
+      toast({ title: t('absence.requestApproved') });
+
+      void createAppNotification({
+        title: t('absence.notificationApprovedTitle'),
+        description: resolveEmployeeName(request.userId, request.employeeName),
         type: 'success',
         link: '/absence',
         payload: { requestId: request.id },
       });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('absence.requestActionFailed');
+      toast({ title: t('absence.requestActionFailed'), description: message, variant: 'destructive' });
     }
   };
 
-  const handleReject = (requestId: string) => {
-    const request = leaveRequests.find((item) => item.id === requestId);
-    setLeaveRequests(prev => prev.map(r => {
-      if (r.id !== requestId) return r;
-      setBalances(bs => bs.map(b => b.userId === r.userId
-        ? { ...b, pendingDays: b.pendingDays - r.days, remainingDays: b.remainingDays + r.days }
-        : b
-      ));
-      return { ...r, status: 'Rejected' as LeaveStatus };
-    }));
-    toast({ title: t('absence.requestRejected') });
+  const handleReject = async (requestId: string) => {
+    if (!isAdmin) {
+      toast({ title: t('absence.validationUnauthorized'), variant: 'destructive' });
+      return;
+    }
 
-    if (request) {
+    const request = leaveRequests.find((item) => item.id === requestId);
+    if (!request) {
+      return;
+    }
+
+    try {
+      await rejectLeaveRequest(requestId);
+      toast({ title: t('absence.requestRejected') });
+
       void createAppNotification({
-        title: 'Leave request rejected',
-        description: `${request.employeeName}'s leave request was rejected.`,
+        title: t('absence.notificationRejectedTitle'),
+        description: resolveEmployeeName(request.userId, request.employeeName),
         type: 'error',
         link: '/absence',
         payload: { requestId: request.id },
       });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('absence.requestActionFailed');
+      toast({ title: t('absence.requestActionFailed'), description: message, variant: 'destructive' });
     }
   };
 
@@ -190,12 +313,23 @@ const AbsencePage = () => {
   }
 
   const getLeaveForDay = (day: Date) => {
-    return approvedRequests.filter(r => {
-      const start = parseISO(r.startDate);
-      const end = parseISO(r.endDate);
+    return approvedRequestIntervals.filter(({ start, end }) => {
       return day >= start && day <= end;
-    });
+    }).map(({ request }) => request);
   };
+
+  if (isLeaveLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">{t('absence.title')}</h1>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-5 text-sm text-muted-foreground">{t('absence.loading')}</CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const requestedDays = formStartDate && formEndDate ? calculateDays(formStartDate, formEndDate) : 0;
 
   return (
     <div className="space-y-6">
@@ -206,7 +340,7 @@ const AbsencePage = () => {
       <Tabs defaultValue="myLeave">
         <TabsList>
           <TabsTrigger value="myLeave">{t('absence.myLeave')}</TabsTrigger>
-          <TabsTrigger value="approvals">{t('absence.approvals')}</TabsTrigger>
+          {isAdmin && <TabsTrigger value="approvals">{t('absence.approvals')}</TabsTrigger>}
           <TabsTrigger value="calendar">{t('absence.teamCalendar')}</TabsTrigger>
         </TabsList>
 
@@ -239,11 +373,20 @@ const AbsencePage = () => {
           <div className="flex justify-end">
             <Button
               onClick={() => setShowRequestModal(true)}
+              disabled={!currentUserId || isLeaveMutating}
               className="bg-gradient-to-r from-[hsl(var(--cores-teal))] to-[hsl(var(--cores-green))] text-white hover:opacity-90"
             >
               <Plus size={16} className="mr-1" /> {t('absence.requestLeave')}
             </Button>
           </div>
+
+          {noLinkedEmployee && (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-5 text-sm text-muted-foreground">
+                {t('absence.noLinkedEmployee')}
+              </CardContent>
+            </Card>
+          )}
 
           {/* History table */}
           <Card className="border-0 shadow-sm">
@@ -270,7 +413,7 @@ const AbsencePage = () => {
                   </TableHeader>
                   <TableBody>
                     {myRequests.map((req) => {
-                      const sub = req.substituteUserId ? mockEmployees.find(e => e.id === req.substituteUserId) : null;
+                      const sub = req.substituteUserId ? employees.find(e => e.id === req.substituteUserId) : null;
                       return (
                         <TableRow key={req.id}>
                           <TableCell>
@@ -278,9 +421,9 @@ const AbsencePage = () => {
                               {leaveTypeIcon(req.leaveType)} {translateLeaveType(req.leaveType)}
                             </span>
                           </TableCell>
-                          <TableCell className="text-sm">{req.startDate} → {req.endDate}</TableCell>
+                          <TableCell className="text-sm">{formatDateValue(req.startDate)} - {formatDateValue(req.endDate)}</TableCell>
                           <TableCell className="text-sm font-medium">{req.days}</TableCell>
-                          <TableCell className="text-sm">{sub ? `${sub.firstName} ${sub.lastName}` : '—'}</TableCell>
+                          <TableCell className="text-sm">{sub ? `${sub.firstName} ${sub.lastName}` : t('absence.none')}</TableCell>
                           <TableCell>
                             <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', statusColor(req.status))}>
                               {translateStatus(req.status)}
@@ -297,7 +440,8 @@ const AbsencePage = () => {
         </TabsContent>
 
         {/* ===== APPROVALS TAB ===== */}
-        <TabsContent value="approvals" className="space-y-6">
+        {isAdmin && (
+          <TabsContent value="approvals" className="space-y-6">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-0">
               <div className="p-5 pb-0">
@@ -323,24 +467,24 @@ const AbsencePage = () => {
                   </TableHeader>
                   <TableBody>
                     {pendingRequests.map((req) => {
-                      const sub = req.substituteUserId ? mockEmployees.find(e => e.id === req.substituteUserId) : null;
+                      const sub = req.substituteUserId ? employees.find(e => e.id === req.substituteUserId) : null;
                       return (
                         <TableRow key={req.id}>
-                          <TableCell className="font-medium">{req.employeeName}</TableCell>
+                          <TableCell className="font-medium">{resolveEmployeeName(req.userId, req.employeeName)}</TableCell>
                           <TableCell>
                             <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium', leaveTypeColor(req.leaveType))}>
                               {leaveTypeIcon(req.leaveType)} {translateLeaveType(req.leaveType)}
                             </span>
                           </TableCell>
-                          <TableCell className="text-sm">{req.startDate} → {req.endDate}</TableCell>
+                          <TableCell className="text-sm">{formatDateValue(req.startDate)} - {formatDateValue(req.endDate)}</TableCell>
                           <TableCell className="text-sm font-medium">{req.days}</TableCell>
-                          <TableCell className="text-sm">{sub ? `${sub.firstName} ${sub.lastName}` : '—'}</TableCell>
+                          <TableCell className="text-sm">{sub ? `${sub.firstName} ${sub.lastName}` : t('absence.none')}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button size="sm" variant="outline" className="h-8 border-emerald-300 text-emerald-600 hover:bg-emerald-50" onClick={() => handleApprove(req.id)}>
+                              <Button size="sm" variant="outline" disabled={isLeaveMutating} className="h-8 border-emerald-300 text-emerald-600 hover:bg-emerald-50" onClick={() => handleApprove(req.id)}>
                                 <Check size={14} className="mr-1" /> {t('absence.approve')}
                               </Button>
-                              <Button size="sm" variant="outline" className="h-8 border-red-300 text-red-600 hover:bg-red-50" onClick={() => handleReject(req.id)}>
+                              <Button size="sm" variant="outline" disabled={isLeaveMutating} className="h-8 border-red-300 text-red-600 hover:bg-red-50" onClick={() => handleReject(req.id)}>
                                 <X size={14} className="mr-1" /> {t('absence.reject')}
                               </Button>
                             </div>
@@ -353,20 +497,31 @@ const AbsencePage = () => {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+          </TabsContent>
+        )}
 
         {/* ===== TEAM CALENDAR TAB ===== */}
         <TabsContent value="calendar" className="space-y-4">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-4">
-                <Button variant="ghost" size="icon" onClick={() => setCalendarMonth(prev => subMonths(prev, 1))}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('absence.previousMonth')}
+                  onClick={() => setCalendarMonth(prev => subMonths(prev, 1))}
+                >
                   <ChevronLeft size={18} />
                 </Button>
                 <h2 className="text-lg font-semibold text-foreground">
-                  {format(calendarMonth, 'MMMM yyyy')}
+                  {format(calendarMonth, 'MMMM yyyy', { locale: dateLocale })}
                 </h2>
-                <Button variant="ghost" size="icon" onClick={() => setCalendarMonth(prev => addMonths(prev, 1))}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('absence.nextMonth')}
+                  onClick={() => setCalendarMonth(prev => addMonths(prev, 1))}
+                >
                   <ChevronRight size={18} />
                 </Button>
               </div>
@@ -383,7 +538,7 @@ const AbsencePage = () => {
                 <div className="min-w-[700px]">
                   {/* Day headers */}
                   <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground mb-1">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                    {calendarWeekdayLabels.map(d => (
                       <div key={d} className="py-2">{d}</div>
                     ))}
                   </div>
@@ -414,19 +569,19 @@ const AbsencePage = () => {
                             </div>
                             <div className="space-y-0.5">
                               {dayLeaves.slice(0, 3).map((leave) => {
-                                const emp = mockEmployees.find(e => e.id === leave.userId);
+                                const emp = employeeMap.get(leave.userId);
                                 return (
                                   <div
                                     key={leave.id}
                                     className={cn('truncate rounded px-1 py-0.5 text-white text-[10px] font-medium', leaveTypeBg(leave.leaveType))}
-                                    title={`${leave.employeeName} - ${leave.leaveType}`}
+                                    title={`${resolveEmployeeName(leave.userId, leave.employeeName)} - ${translateLeaveType(leave.leaveType)}`}
                                   >
-                                    {emp ? emp.firstName : leave.employeeName.split(' ')[0]}
+                                    {emp ? emp.firstName : resolveEmployeeFirstName(leave.userId, leave.employeeName)}
                                   </div>
                                 );
                               })}
                               {dayLeaves.length > 3 && (
-                                <div className="text-muted-foreground text-[10px]">+{dayLeaves.length - 3} more</div>
+                                <div className="text-muted-foreground text-[10px]">+{dayLeaves.length - 3} {t('absence.more')}</div>
                               )}
                             </div>
                           </div>
@@ -498,7 +653,7 @@ const AbsencePage = () => {
             {/* Business days preview */}
             {formStartDate && formEndDate && (
               <div className="rounded-lg bg-muted/50 p-3 text-sm">
-                <span className="font-medium">{calculateDays(formStartDate, formEndDate)}</span> {t('absence.daysCount').toLowerCase()} ({t('absence.remaining')}: {myBalance ? myBalance.remainingDays - calculateDays(formStartDate, formEndDate) : '—'})
+                <span className="font-medium">{requestedDays}</span> {t('absence.daysCount').toLowerCase()} ({t('absence.remaining')}: {myBalance ? myBalance.remainingDays - requestedDays : t('absence.none')})
               </div>
             )}
 
@@ -521,7 +676,7 @@ const AbsencePage = () => {
             <Button
               className="w-full bg-gradient-to-r from-[hsl(var(--cores-teal))] to-[hsl(var(--cores-green))] text-white hover:opacity-90"
               onClick={handleSubmitRequest}
-              disabled={!formStartDate || !formEndDate}
+              disabled={!formStartDate || !formEndDate || !currentUserId || isLeaveMutating}
             >
               {t('absence.submitRequest')}
             </Button>

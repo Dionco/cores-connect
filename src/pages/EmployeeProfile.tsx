@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees } from '@/data/mockData';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,8 @@ const EmployeeProfile = () => {
   const { id } = useParams();
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const emp = mockEmployees.find(e => e.id === id);
+  const { employees } = useEmployees();
+  const emp = employees.find(e => e.id === id);
 
   if (!emp) {
     return (

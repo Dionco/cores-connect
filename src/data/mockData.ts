@@ -258,7 +258,7 @@ export interface LeaveRequest {
 }
 
 export const mockLeaveBalances: LeaveBalance[] = [
-  { userId: 'emp-001', totalAnnualDays: 25, usedDays: 8, pendingDays: 3, remainingDays: 14 },
+  { userId: 'emp-001', totalAnnualDays: 25, usedDays: 8, pendingDays: 5, remainingDays: 12 },
   { userId: 'emp-002', totalAnnualDays: 25, usedDays: 5, pendingDays: 0, remainingDays: 20 },
   { userId: 'emp-003', totalAnnualDays: 25, usedDays: 12, pendingDays: 5, remainingDays: 8 },
   { userId: 'emp-004', totalAnnualDays: 25, usedDays: 3, pendingDays: 0, remainingDays: 22 },

@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { AlertTriangle, CalendarIcon, CheckCircle2, Eye, Loader2, Mail, Pencil, Shield } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, CheckCircle2, Eye, Loader2, Mail, Pencil, Shield, XCircle } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { contractTypes, departments } from '@/data/mockData';
 import { createAppNotification } from '@/lib/notifications';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useInvalidateEmployees } from '@/hooks/useEmployees';
 import {
   createEmployeeRecord,
   fetchGraphResources,
+  fetchProvisioningJobLogs,
   triggerOnboardingAutomation,
 } from '@/lib/automation/client';
+import type { ProvisioningJobLog } from '@/lib/automation/client';
 import {
   buildSecurityGroupSections,
   getSecurityGroupDisplayLabel,
@@ -66,6 +69,7 @@ const deriveWorkEmail = (firstName: string, lastName: string): string => {
 
 const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   const { t } = useLanguage();
+  const invalidateEmployees = useInvalidateEmployees();
 
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [view, setView] = useState<DialogView>('wizard');
@@ -81,6 +85,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   const [contractType, setContractType] = useState('');
   const [workPhone, setWorkPhone] = useState('');
   const [personalPhone, setPersonalPhone] = useState('');
+  const [startOnboarding, setStartOnboarding] = useState(true);
 
   const [selectedMailboxes, setSelectedMailboxes] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
@@ -100,6 +105,8 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   });
 
   const [createdEmployeeEmail, setCreatedEmployeeEmail] = useState<string>('');
+  const [provisioningLogs, setProvisioningLogs] = useState<ProvisioningJobLog[]>([]);
+  const [provisioningJobStatus, setProvisioningJobStatus] = useState<'Completed' | 'Failed' | null>(null);
 
   useEffect(() => {
     const suggestedEmail = deriveWorkEmail(firstName, lastName);
@@ -122,6 +129,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     setContractType('');
     setWorkPhone('');
     setPersonalPhone('');
+    setStartOnboarding(true);
     setSelectedMailboxes([]);
     setSelectedGroupIds([]);
     setAvailableMailboxes([]);
@@ -133,6 +141,8 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     setErrorMessage(null);
     setErrors({ firstName: false, lastName: false, role: false, department: false });
     setCreatedEmployeeEmail('');
+    setProvisioningLogs([]);
+    setProvisioningJobStatus(null);
   };
 
   const loadGraphResources = async () => {
@@ -154,10 +164,10 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   };
 
   useEffect(() => {
-    if (open) {
+    if (open && startOnboarding) {
       void loadGraphResources();
     }
-  }, [open]);
+  }, [open, startOnboarding]);
 
   const closeAndReset = () => {
     onOpenChange(false);
@@ -182,12 +192,26 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
       return;
     }
 
+    if (currentStep === 1 && !startOnboarding) {
+      setErrorMessage(null);
+      setView('wizard');
+      setCurrentStep(4);
+      return;
+    }
+
     setErrorMessage(null);
     setView('wizard');
     setCurrentStep((prev) => Math.min(prev + 1, 4) as WizardStep);
   };
 
   const previousStep = () => {
+    if (currentStep === 4 && !startOnboarding) {
+      setErrorMessage(null);
+      setView('wizard');
+      setCurrentStep(1);
+      return;
+    }
+
     setErrorMessage(null);
     setView('wizard');
     setCurrentStep((prev) => Math.max(prev - 1, 1) as WizardStep);
@@ -241,6 +265,19 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     }));
   }, [normalizedGroupMap, selectedGroupIds, t]);
 
+  const visibleWizardSteps = useMemo<WizardStep[]>(
+    () => (startOnboarding ? WIZARD_STEPS : [1, 4]),
+    [startOnboarding],
+  );
+  const currentVisibleStepIndex = Math.max(visibleWizardSteps.indexOf(currentStep), 0);
+  const isOnFinalVisibleStep = currentStep === visibleWizardSteps[visibleWizardSteps.length - 1];
+
+  useEffect(() => {
+    if (!startOnboarding && (currentStep === 2 || currentStep === 3)) {
+      setCurrentStep(4);
+    }
+  }, [currentStep, startOnboarding]);
+
   const handleCreateAccount = async () => {
     if (isCreating) {
       return;
@@ -265,9 +302,40 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
         personalPhone: personalPhone.trim(),
       });
 
+      const resolvedEmail = createdEmployee.email || deriveWorkEmail(firstName, lastName);
+      setCreatedEmployeeEmail(resolvedEmail);
+
+      if (!startOnboarding) {
+        setCreationPhase('finalizing');
+        setProvisioningLogs([]);
+        setProvisioningJobStatus(null);
+
+        void invalidateEmployees();
+        setView('success');
+
+        toast({
+          title: 'Employee created',
+          description: `${firstName} ${lastName} was created. Onboarding automation was not started.`,
+          variant: 'default',
+        });
+
+        void createAppNotification({
+          title: 'Employee created',
+          description: `${firstName} ${lastName} (${resolvedEmail})`,
+          type: 'info',
+          link: '/employees',
+          payload: {
+            employeeId: createdEmployee.id,
+            onboardingStarted: false,
+          },
+        });
+
+        return;
+      }
+
       setCreationPhase('provisioning');
 
-      await triggerOnboardingAutomation({
+      const automationResult = await triggerOnboardingAutomation({
         employeeId: createdEmployee.id,
         service: 'M365',
         selectedMailboxes,
@@ -275,18 +343,28 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
       });
 
       setCreationPhase('finalizing');
-      setCreatedEmployeeEmail(createdEmployee.email || deriveWorkEmail(firstName, lastName));
+
+      // Fetch detailed provisioning logs to show per-step results
+      const logs = await fetchProvisioningJobLogs(automationResult.jobId);
+      setProvisioningLogs(logs);
+      setProvisioningJobStatus(automationResult.status === 'Completed' ? 'Completed' : 'Failed');
+
+      void invalidateEmployees();
       setView('success');
 
+      const hasErrors = logs.some((log) => log.status === 'error');
       toast({
-        title: 'Account created',
-        description: `${firstName} ${lastName} was provisioned successfully.`,
+        title: hasErrors ? 'Account created with warnings' : 'Account created',
+        description: hasErrors
+          ? `${firstName} ${lastName} was provisioned but some steps had issues.`
+          : `${firstName} ${lastName} was provisioned successfully.`,
+        variant: hasErrors ? 'destructive' : 'default',
       });
 
       void createAppNotification({
-        title: 'M365 account provisioned',
-        description: `${firstName} ${lastName} (${createdEmployee.email || deriveWorkEmail(firstName, lastName)})`,
-        type: 'success',
+        title: hasErrors ? 'M365 account provisioned with warnings' : 'M365 account provisioned',
+        description: `${firstName} ${lastName} (${resolvedEmail})`,
+        type: hasErrors ? 'warning' : 'success',
         link: '/provisioning',
         payload: {
           employeeId: createdEmployee.id,
@@ -434,6 +512,22 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
           <Label className="text-xs">{t('form.personalPhone')}</Label>
           <Input value={personalPhone} onChange={(event) => setPersonalPhone(event.target.value)} />
         </div>
+      </div>
+
+      <div className="rounded-lg border p-3">
+        <label className="flex cursor-pointer items-start gap-3">
+          <Checkbox
+            checked={startOnboarding}
+            onCheckedChange={(value) => setStartOnboarding(Boolean(value))}
+            className="mt-0.5"
+          />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Start Microsoft 365 onboarding</p>
+            <p className="text-xs text-muted-foreground">
+              When enabled, this employee goes through Microsoft account provisioning now. If disabled, only the employee record is created.
+            </p>
+          </div>
+        </label>
       </div>
     </div>
   );
@@ -609,29 +703,40 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     </div>
   );
 
-  const CREATION_STEPS = [
-    { phase: 'record' as const, label: 'Creating employee record' },
-    { phase: 'provisioning' as const, label: 'Provisioning Microsoft 365 account' },
-    { phase: 'finalizing' as const, label: 'Finalizing setup' },
-  ];
-
   const renderCreationProgress = () => {
-    const phaseOrder = ['record', 'provisioning', 'finalizing'] as const;
-    const currentIndex = phaseOrder.indexOf(creationPhase as typeof phaseOrder[number]);
+    const creationSteps = startOnboarding
+      ? [
+        { phase: 'record' as const, label: 'Creating employee record' },
+        { phase: 'provisioning' as const, label: 'Provisioning Microsoft 365 account' },
+        { phase: 'finalizing' as const, label: 'Finalizing setup' },
+      ]
+      : [
+        { phase: 'record' as const, label: 'Creating employee record' },
+        { phase: 'finalizing' as const, label: 'Finalizing setup' },
+      ];
+
+    const phaseOrder = creationSteps.map((step) => step.phase);
+    const currentIndex = creationPhase === 'idle' ? -1 : phaseOrder.indexOf(creationPhase);
 
     return (
       <div className="space-y-4 py-2">
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-          <p className="mt-3 text-sm font-semibold">Setting up {firstName} {lastName}</p>
-          <p className="mt-1 text-xs text-muted-foreground">This may take up to a minute — please don't close this dialog.</p>
+          <p className="mt-3 text-sm font-semibold">
+            {startOnboarding ? `Setting up ${firstName} ${lastName}` : `Creating ${firstName} ${lastName}`}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {startOnboarding
+              ? 'This may take up to a minute - please do not close this dialog.'
+              : 'This usually takes a few seconds.'}
+          </p>
         </div>
 
         <div className="space-y-2 rounded-lg border p-4">
-          {CREATION_STEPS.map((step, index) => {
-            const isActive = phaseOrder[index] === creationPhase;
-            const isComplete = index < currentIndex;
-            const isPending = index > currentIndex;
+          {creationSteps.map((step, index) => {
+            const isActive = step.phase === creationPhase;
+            const isComplete = currentIndex > -1 && index < currentIndex;
+            const isPending = currentIndex === -1 || index > currentIndex;
 
             return (
               <div key={step.phase} className="flex items-center gap-3">
@@ -684,34 +789,46 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
               <dt className="text-muted-foreground">Start Date</dt>
               <dd>{startDate ? format(startDate, 'PPP') : 'Not set'}</dd>
             </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Start onboarding now</dt>
+              <dd>{startOnboarding ? 'Yes' : 'No'}</dd>
+            </div>
           </dl>
         </div>
 
-        <div className="rounded-lg border p-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-            <Mail size={14} /> Shared Mailboxes
-          </div>
-          {selectedMailboxLabels.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None</p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {selectedMailboxLabels.map((mailbox) => <li key={mailbox.key}>{mailbox.label}</li>)}
-            </ul>
-          )}
-        </div>
+        {startOnboarding ? (
+          <>
+            <div className="rounded-lg border p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <Mail size={14} /> Shared Mailboxes
+              </div>
+              {selectedMailboxLabels.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {selectedMailboxLabels.map((mailbox) => <li key={mailbox.key}>{mailbox.label}</li>)}
+                </ul>
+              )}
+            </div>
 
-        <div className="rounded-lg border p-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-            <Shield size={14} /> Security Groups
+            <div className="rounded-lg border p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <Shield size={14} /> Security Groups
+              </div>
+              {selectedGroupLabels.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {selectedGroupLabels.map((group) => <li key={group.key}>{group.label}</li>)}
+                </ul>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border border-muted bg-muted/20 p-3 text-sm text-muted-foreground">
+            Microsoft 365 onboarding is turned off. Shared mailbox and security group assignment will be skipped.
           </div>
-          {selectedGroupLabels.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None</p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {selectedGroupLabels.map((group) => <li key={group.key}>{group.label}</li>)}
-            </ul>
-          )}
-        </div>
+        )}
 
         {errorMessage && (
           <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
@@ -725,6 +842,10 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   const renderWizardContent = () => {
     if (currentStep === 1) {
       return renderStepOne();
+    }
+
+    if (!startOnboarding) {
+      return renderStepFour();
     }
 
     if (currentStep === 2) {
@@ -752,70 +873,234 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     >
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         {view === 'success' ? (
-          <div className="space-y-5 py-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-              <CheckCircle2 size={24} />
-            </div>
+          (() => {
+            if (!startOnboarding) {
+              return (
+                <div className="space-y-5 py-3">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <CheckCircle2 size={24} />
+                  </div>
 
-            <div className="text-center">
-              <h2 className="text-xl font-semibold">Account created successfully</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {createdEmployeeEmail || workEmail || deriveWorkEmail(firstName, lastName)}
-              </p>
-            </div>
+                  <div className="text-center">
+                    <h2 className="text-xl font-semibold">Employee created</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {createdEmployeeEmail || workEmail || deriveWorkEmail(firstName, lastName)}
+                    </p>
+                  </div>
 
-            <div className="space-y-3 rounded-lg border p-4">
-              <div className="text-sm">
-                <div className="flex justify-between gap-4 py-2 border-b">
-                  <span className="font-semibold">Employee</span>
-                  <span>{firstName} {lastName}</span>
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div className="text-sm">
+                      <div className="flex justify-between gap-4 py-2 border-b">
+                        <span className="font-semibold">Employee</span>
+                        <span>{firstName} {lastName}</span>
+                      </div>
+                      <div className="flex justify-between gap-4 py-2 border-b">
+                        <span className="font-semibold">Department</span>
+                        <span>{department}</span>
+                      </div>
+                      <div className="flex justify-between gap-4 py-2">
+                        <span className="font-semibold">Onboarding</span>
+                        <span className="font-medium text-muted-foreground">Not started</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/30">
+                    Microsoft 365 onboarding was not started for this employee. You can start provisioning later from the provisioning flow.
+                  </p>
+
+                  <Button className="w-full" onClick={closeAndReset}>Done</Button>
                 </div>
-                <div className="flex justify-between gap-4 py-2 border-b">
-                  <span className="font-semibold">Department</span>
-                  <span>{department}</span>
+              );
+            }
+
+            const errorLogs = provisioningLogs.filter((l) => l.status === 'error');
+            const successLogs = provisioningLogs.filter(
+              (l) => l.status === 'done' && !l.step.startsWith('Job queued') && !l.step.startsWith('Worker started'),
+            );
+            const hasErrors = errorLogs.length > 0;
+
+            // Categorize logs for display
+            const categorize = (log: ProvisioningJobLog) => {
+              const s = log.step.toLowerCase();
+              if (s.includes('m365 account') || s.includes('m365 user')) return 'account';
+              if (s.includes('licence') || s.includes('license')) return 'license';
+              if (s.includes('shared mailbox') || s.includes('mailbox')) return 'mailbox';
+              if (s.includes('sharepoint')) return 'sharepoint';
+              if (s.includes('security group')) return 'group';
+              return 'other';
+            };
+
+            const mailboxLogs = provisioningLogs.filter((l) => categorize(l) === 'mailbox');
+            const groupLogs = provisioningLogs.filter((l) => categorize(l) === 'group');
+            const sharepointLogs = provisioningLogs.filter((l) => categorize(l) === 'sharepoint');
+            const accountLogs = provisioningLogs.filter((l) => categorize(l) === 'account');
+            const licenseLogs = provisioningLogs.filter((l) => categorize(l) === 'license');
+
+            const renderLogIcon = (status: string) =>
+              status === 'error'
+                ? <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />;
+
+            const renderLogSection = (
+              title: string,
+              icon: React.ReactNode,
+              logs: ProvisioningJobLog[],
+            ) => {
+              if (logs.length === 0) return null;
+              const sectionHasErrors = logs.some((l) => l.status === 'error');
+              return (
+                <div className={cn(
+                  'space-y-2 rounded-lg border p-4',
+                  sectionHasErrors
+                    ? 'border-amber-300 bg-amber-50'
+                    : 'border-emerald-200 bg-emerald-50',
+                )}>
+                  <div className="flex items-center gap-2">
+                    {icon}
+                    <p className={cn('text-sm font-semibold', sectionHasErrors ? 'text-amber-900' : 'text-emerald-900')}>
+                      {title}
+                    </p>
+                    {sectionHasErrors && (
+                      <span className="ml-auto rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                        Issues detected
+                      </span>
+                    )}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {logs.map((log, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        {renderLogIcon(log.status)}
+                        <span className={cn(
+                          'text-xs leading-relaxed',
+                          log.status === 'error' ? 'text-destructive' : sectionHasErrors ? 'text-amber-800' : 'text-emerald-800',
+                        )}>
+                          {log.step}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="flex justify-between gap-4 py-2 border-b">
-                  <span className="font-semibold">Status</span>
-                  <span className="text-emerald-600 font-medium">✓ Provisioned</span>
+              );
+            };
+
+            return (
+              <div className="space-y-5 py-3">
+                <div className={cn(
+                  'mx-auto flex h-12 w-12 items-center justify-center rounded-full',
+                  hasErrors ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700',
+                )}>
+                  {hasErrors ? <AlertTriangle size={24} /> : <CheckCircle2 size={24} />}
                 </div>
+
+                <div className="text-center">
+                  <h2 className="text-xl font-semibold">
+                    {hasErrors ? 'Account created with warnings' : 'Account created successfully'}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {createdEmployeeEmail || workEmail || deriveWorkEmail(firstName, lastName)}
+                  </p>
+                </div>
+
+                {hasErrors && (
+                  <div className="flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                    <div className="text-xs text-amber-800">
+                      <p className="font-semibold">
+                        {errorLogs.length} provisioning step{errorLogs.length === 1 ? '' : 's'} failed
+                      </p>
+                      <p className="mt-0.5">
+                        The employee account was created but some assignments could not be completed.
+                        Check the details below and retry from the Provisioning page if needed.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="text-sm">
+                    <div className="flex justify-between gap-4 py-2 border-b">
+                      <span className="font-semibold">Employee</span>
+                      <span>{firstName} {lastName}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 py-2 border-b">
+                      <span className="font-semibold">Department</span>
+                      <span>{department}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 py-2">
+                      <span className="font-semibold">Status</span>
+                      <span className={cn('font-medium', hasErrors ? 'text-amber-600' : 'text-emerald-600')}>
+                        {hasErrors ? 'Provisioned with warnings' : 'Provisioned'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {provisioningLogs.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Provisioning Results ({successLogs.length} done, {errorLogs.length} failed)
+                    </p>
+
+                    {renderLogSection('M365 Account', <Mail className={accountLogs.some(l => l.status === 'error') ? 'text-amber-600' : 'text-emerald-600'} size={16} />, accountLogs)}
+                    {renderLogSection('License', <CheckCircle2 className={licenseLogs.some(l => l.status === 'error') ? 'text-amber-600' : 'text-emerald-600'} size={16} />, licenseLogs)}
+                    {renderLogSection('Shared Mailboxes', <Mail className={mailboxLogs.some(l => l.status === 'error') ? 'text-amber-600' : 'text-emerald-600'} size={16} />, mailboxLogs)}
+                    {renderLogSection('SharePoint', <Shield className={sharepointLogs.some(l => l.status === 'error') ? 'text-amber-600' : 'text-emerald-600'} size={16} />, sharepointLogs)}
+                    {renderLogSection('Security Groups', <Shield className={groupLogs.some(l => l.status === 'error') ? 'text-amber-600' : 'text-emerald-600'} size={16} />, groupLogs)}
+                  </div>
+                ) : (
+                  <>
+                    {selectedMailboxLabels.length > 0 && (
+                      <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex items-center gap-2">
+                          <Mail className="text-emerald-600" size={16} />
+                          <p className="text-sm font-semibold text-emerald-900">Shared Mailboxes</p>
+                        </div>
+                        <ul className="space-y-1">
+                          {selectedMailboxLabels.map((mailbox) => (
+                            <li key={mailbox.key} className="text-xs text-emerald-800">
+                              <span className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {mailbox.label}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {selectedGroupLabels.length > 0 && (
+                      <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex items-center gap-2">
+                          <Shield className="text-emerald-600" size={16} />
+                          <p className="text-sm font-semibold text-emerald-900">Security Groups</p>
+                        </div>
+                        <ul className="space-y-1">
+                          {selectedGroupLabels.map((group) => (
+                            <li key={group.key} className="text-xs text-emerald-800">
+                              <span className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {group.label}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <p className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/30">
+                  {hasErrors
+                    ? <>Some provisioning steps failed. Visit the{' '}
+                        <a href="/provisioning" className="font-semibold underline">Provisioning page</a> to retry failed steps or review detailed logs.</>
+                    : <>All provisioning steps completed. Check the{' '}
+                        <a href="/provisioning" className="font-semibold underline">Provisioning page</a> for detailed logs.</>}
+                </p>
+
+                <Button className="w-full" onClick={closeAndReset}>Done</Button>
               </div>
-            </div>
+            );
+          })()
 
-            {selectedMailboxLabels.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-center gap-2">
-                  <Mail className="text-emerald-600" size={16} />
-                  <p className="text-sm font-semibold text-emerald-900">Shared Mailboxes</p>
-                </div>
-                <ul className="space-y-1">
-                  {selectedMailboxLabels.map((mailbox) => (
-                    <li key={mailbox.key} className="text-xs text-emerald-800">✓ {mailbox.label}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {selectedGroupLabels.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-center gap-2">
-                  <Shield className="text-emerald-600" size={16} />
-                  <p className="text-sm font-semibold text-emerald-900">Security Groups</p>
-                </div>
-                <ul className="space-y-1">
-                  {selectedGroupLabels.map((group) => (
-                    <li key={group.key} className="text-xs text-emerald-800">✓ {group.label}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <p className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/30">
-              The provisioning process runs in the background. Check the{' '}
-              <a href="/provisioning" className="font-semibold underline">Provisioning page</a> for detailed logs and to monitor completion.
-            </p>
-
-            <Button className="w-full" onClick={closeAndReset}>Done</Button>
-          </div>
         ) : (
           <>
             <DialogHeader>
@@ -823,12 +1108,12 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
             </DialogHeader>
 
             <div className="space-y-4">
-              <Progress value={(currentStep / 4) * 100} className="h-2" />
+              <Progress value={((currentVisibleStepIndex + 1) / visibleWizardSteps.length) * 100} className="h-2" />
 
-              <div className="grid grid-cols-4 gap-2">
-                {WIZARD_STEPS.map((step) => {
+              <div className={cn('grid gap-2', visibleWizardSteps.length === 4 ? 'grid-cols-4' : 'grid-cols-2')}>
+                {visibleWizardSteps.map((step, index) => {
                   const isActive = currentStep === step;
-                  const isComplete = currentStep > step;
+                  const isComplete = currentVisibleStepIndex > index;
 
                   return (
                     <button
@@ -841,12 +1126,12 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
                       )}
                       disabled={isCreating}
                       onClick={() => {
-                        if (step <= currentStep) {
+                        if (index <= currentVisibleStepIndex) {
                           setCurrentStep(step);
                         }
                       }}
                     >
-                      <p className="text-xs font-semibold">Step {step}</p>
+                      <p className="text-xs font-semibold">Step {index + 1}</p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">{STEP_TITLES[step]}</p>
                     </button>
                   );
@@ -866,14 +1151,14 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
                       <Button
                         variant="outline"
                         onClick={previousStep}
-                        disabled={currentStep === 1}
+                        disabled={currentVisibleStepIndex === 0}
                       >
                         Back
                       </Button>
 
-                      {currentStep < 4 ? (
+                      {!isOnFinalVisibleStep ? (
                         <Button onClick={nextStep}>
-                          Next
+                          {currentStep === 1 && !startOnboarding ? 'Review' : 'Next'}
                         </Button>
                       ) : (
                         <Button onClick={handleCreateAccount}>
@@ -883,13 +1168,21 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
                     </div>
                   </div>
 
-                  {currentStep === 4 && (
-                    <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-cores-orange" />
-                      <p className="text-xs leading-relaxed text-foreground">
-                        Creating the account runs Microsoft 365 provisioning synchronously and can take a moment.
-                      </p>
-                    </div>
+                  {isOnFinalVisibleStep && (
+                    startOnboarding ? (
+                      <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <AlertTriangle size={18} className="mt-0.5 shrink-0 text-cores-orange" />
+                        <p className="text-xs leading-relaxed text-foreground">
+                          Creating the account runs Microsoft 365 provisioning synchronously and can take a moment.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-muted bg-muted/20 p-3">
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          Creating the account will only add the employee record. Microsoft 365 onboarding will not start.
+                        </p>
+                      </div>
+                    )
                   )}
                 </>
               )}

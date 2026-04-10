@@ -204,6 +204,33 @@ export const fetchGraphResources = async (): Promise<GraphResourcesResult> => {
   };
 };
 
+export interface ProvisioningJobLog {
+  step: string;
+  status: 'done' | 'pending' | 'error';
+  log_timestamp: string | null;
+}
+
+export const fetchProvisioningJobLogs = async (
+  jobId: string,
+): Promise<ProvisioningJobLog[]> => {
+  if (!isSupabaseConfigured || !supabase) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('provisioning_job_logs')
+    .select('step, status, log_timestamp')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Failed to fetch provisioning job logs:', error.message);
+    return [];
+  }
+
+  return (data || []) as ProvisioningJobLog[];
+};
+
 export const retryProvisioningAutomation = async (
   jobId: string,
 ): Promise<RetryAutomationResult> => {

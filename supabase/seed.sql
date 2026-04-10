@@ -174,7 +174,7 @@ insert into public.leave_balances (
   remaining_days
 )
 values
-  ('emp-001', 25, 8, 3, 14),
+  ('emp-001', 25, 8, 5, 12),
   ('emp-002', 25, 5, 0, 20),
   ('emp-003', 25, 12, 5, 8),
   ('emp-004', 25, 3, 0, 22),

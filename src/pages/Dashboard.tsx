@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockEmployees, mockProvisioningJobs, mockLeaveRequests, mockLeaveBalances } from '@/data/mockData';
+import { mockProvisioningJobs, mockLeaveRequests, mockLeaveBalances } from '@/data/mockData';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -10,21 +11,22 @@ import StatusBadge from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 const Dashboard = () => {
   const { t } = useLanguage();
+  const { employees } = useEmployees();
 
-  const totalEmployees = mockEmployees.filter(e => e.status !== 'Inactive').length;
-  const activeOnboardings = mockEmployees.filter(e => e.status === 'Onboarding').length;
+  const totalEmployees = employees.filter(e => e.status !== 'Inactive').length;
+  const activeOnboardings = employees.filter(e => e.status === 'Onboarding').length;
   const pendingProvisioning = mockProvisioningJobs.filter(j => j.status === 'Queued' || j.status === 'Running').length;
-  const recentlyAdded = mockEmployees.filter(e => {
+  const recentlyAdded = employees.filter(e => {
     const d = new Date(e.startDate);
     const now = new Date('2026-03-23');
     return (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24) <= 30;
   }).length;
 
-  const recentEmployees = [...mockEmployees]
+  const recentEmployees = [...employees]
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
     .slice(0, 5);
 
-  const onboardingEmployees = mockEmployees.filter(e => e.status === 'Onboarding');
+  const onboardingEmployees = employees.filter(e => e.status === 'Onboarding');
 
   const stats = [
     { label: t('dashboard.totalEmployees'), value: totalEmployees, icon: Users, color: 'text-cores-teal' },
