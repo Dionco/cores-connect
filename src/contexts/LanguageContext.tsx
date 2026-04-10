@@ -1,4 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { onboardingTranslations } from '@/data/onboardingTranslations';
 
 type Language = 'en' | 'nl';
 
@@ -8,7 +10,7 @@ interface LanguageContextType {
   t: (key: string) => string;
 }
 
-const translations: Record<string, Record<Language, string>> = {
+const baseTranslations: Record<string, Record<Language, string>> = {
   // Nav
   'nav.dashboard': { en: 'Dashboard', nl: 'Dashboard' },
   'nav.employees': { en: 'Employees', nl: 'Medewerkers' },
@@ -124,6 +126,7 @@ const translations: Record<string, Record<Language, string>> = {
   'onboarding.automationReused': { en: 'An active provisioning job already exists.', nl: 'Er bestaat al een actieve provisioning-taak.' },
   'onboarding.automationError': { en: 'Automation trigger failed', nl: 'Automatisering starten mislukt' },
   'onboarding.jobId': { en: 'Job ID', nl: 'Taak-ID' },
+  'onboarding.retryCount': { en: 'Retry count', nl: 'Aantal retries' },
   'onboarding.noActive': { en: 'No active onboardings', nl: 'Geen actieve onboardings' },
   'onboarding.noActiveDesc': { en: 'When new employees are added, their onboarding will appear here.', nl: 'Wanneer nieuwe medewerkers worden toegevoegd, verschijnt hun onboarding hier.' },
 
@@ -250,6 +253,21 @@ const translations: Record<string, Record<Language, string>> = {
   'notifications.openAction': { en: 'Open', nl: 'Openen' },
   'notifications.openAria': { en: 'Open notifications', nl: 'Meldingen openen' },
   'notifications.unreadAria': { en: 'Open notifications, {count} unread', nl: 'Meldingen openen, {count} ongelezen' },
+};
+
+const onboardingTranslationMap: Record<string, Record<Language, string>> = Object.keys(
+  onboardingTranslations.en,
+).reduce((acc, key) => {
+  acc[key] = {
+    en: onboardingTranslations.en[key] || key,
+    nl: onboardingTranslations.nl[key] || onboardingTranslations.en[key] || key,
+  };
+  return acc;
+}, {} as Record<string, Record<Language, string>>);
+
+const translations: Record<string, Record<Language, string>> = {
+  ...baseTranslations,
+  ...onboardingTranslationMap,
 };
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);

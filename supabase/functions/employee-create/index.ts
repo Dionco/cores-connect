@@ -30,7 +30,14 @@ interface PostgresLikeError {
   message?: string;
 }
 
-const VALID_DEPARTMENTS = new Set(['Sales', 'Customs & Compliance', 'Transport']);
+const VALID_DEPARTMENTS = new Set([
+  'Sales',
+  'Customs & Compliance',
+  'Transport',
+  'Operations',
+  'Planning',
+  'Logistics',
+]);
 const VALID_CONTRACT_TYPES = new Set(['Permanent', 'Intern', 'Freelance']);
 
 const jsonResponse = (status: number, body: Record<string, unknown>) =>

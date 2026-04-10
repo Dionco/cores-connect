@@ -153,6 +153,12 @@ verify_jwt = false
 [functions.onboarding-trigger]
 verify_jwt = false
 
+[functions.onboarding-init]
+verify_jwt = false
+
+[functions.onboarding-task-update]
+verify_jwt = false
+
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used

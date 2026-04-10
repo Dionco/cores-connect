@@ -64,7 +64,7 @@ const OnboardingPage = () => {
   if (selected) {
     const completed = selected.onboardingTasks.filter(t => t.completed).length;
     const total = selected.onboardingTasks.length;
-    const pct = Math.round((completed / total) * 100);
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     return (
       <div className="space-y-4">
@@ -157,8 +157,8 @@ const OnboardingPage = () => {
                 {onboardingEmployees.map((emp) => {
                   const completed = emp.onboardingTasks.filter(t => t.completed).length;
                   const total = emp.onboardingTasks.length;
-                  const pct = Math.round((completed / total) * 100);
-                  const daysSince = Math.floor((new Date('2026-03-23').getTime() - new Date(emp.startDate).getTime()) / (1000 * 60 * 60 * 24));
+                  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                  const daysSince = Math.floor((new Date().getTime() - new Date(emp.startDate).getTime()) / (1000 * 60 * 60 * 24));
 
                   return (
                     <TableRow key={emp.id} className="cursor-pointer" onClick={() => setSelectedId(emp.id)}>

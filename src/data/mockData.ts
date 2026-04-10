@@ -1,6 +1,12 @@
 import type { AppNotification } from '@/types/notifications';
 
-export type Department = 'Sales' | 'Customs & Compliance' | 'Transport';
+export type Department =
+  | 'Sales'
+  | 'Customs & Compliance'
+  | 'Transport'
+  | 'Operations'
+  | 'Planning'
+  | 'Logistics';
 export type EmployeeStatus = 'Active' | 'Inactive' | 'Onboarding';
 export type ContractType = 'Permanent' | 'Intern' | 'Freelance';
 export type ProvisioningStatus = 'Provisioned' | 'Pending' | 'Failed';
@@ -65,7 +71,12 @@ const createOnboardingTasks = (department: Department): OnboardingTask[] => {
     baseTasks.push({ id: '5s', key: 'task.sharedMailboxSales', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Sales' });
   } else if (department === 'Customs & Compliance') {
     baseTasks.push({ id: '5c', key: 'task.sharedMailboxCustoms', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Customs & Compliance' });
-  } else if (department === 'Transport') {
+  } else if (
+    department === 'Transport'
+    || department === 'Operations'
+    || department === 'Planning'
+    || department === 'Logistics'
+  ) {
     baseTasks.push({ id: '5l', key: 'task.sharedMailboxTransport', completed: true, automated: true, completedAt: '2026-03-15 09:03', departmentSpecific: 'Transport' });
   }
 
@@ -202,6 +213,17 @@ export const mockProvisioningJobs: ProvisioningJob[] = [
     ],
   },
   {
+    id: 'pj-007', employeeId: 'emp-008', employeeName: 'Niels de Groot', service: 'M365',
+    status: 'Failed', triggeredAt: '2026-03-11 09:30',
+    logs: [
+      { step: 'Creating M365 account', timestamp: '2026-03-11 09:30:01', status: 'done' },
+      { step: 'Assigning Business Premium licence', timestamp: '2026-03-11 09:30:11', status: 'done' },
+      { step: 'Configuring email niels@cores.nl', timestamp: '2026-03-11 09:30:25', status: 'error' },
+      { step: 'Adding to shared mailboxes', timestamp: '', status: 'pending' },
+      { step: 'Adding to SharePoint group', timestamp: '', status: 'pending' },
+    ],
+  },
+  {
     id: 'pj-004', employeeId: 'emp-008', employeeName: 'Niels de Groot', service: 'Apple ID',
     status: 'Failed', triggeredAt: '2026-03-10 09:00',
     logs: [
@@ -228,7 +250,14 @@ export const mockProvisioningJobs: ProvisioningJob[] = [
   },
 ];
 
-export const departments: Department[] = ['Sales', 'Customs & Compliance', 'Transport'];
+export const departments: Department[] = [
+  'Sales',
+  'Customs & Compliance',
+  'Transport',
+  'Operations',
+  'Planning',
+  'Logistics',
+];
 export const contractTypes: ContractType[] = ['Permanent', 'Intern', 'Freelance'];
 
 // === Leave Management Types & Data ===

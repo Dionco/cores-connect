@@ -98,6 +98,8 @@ Deploy functions:
 supabase functions deploy onboarding-trigger
 supabase functions deploy provisioning-retry
 supabase functions deploy graph-health-check
+supabase functions deploy onboarding-init
+supabase functions deploy onboarding-task-update
 ```
 
 Validate Graph configuration before onboarding runs:

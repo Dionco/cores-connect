@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { AlertTriangle, CalendarIcon, CheckCircle2, Eye, Loader2, Mail, Pencil, Shield, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { contractTypes, departments } from '@/data/mockData';
 import { createAppNotification } from '@/lib/notifications';
@@ -11,6 +12,7 @@ import {
   createEmployeeRecord,
   fetchGraphResources,
   fetchProvisioningJobLogs,
+  initializeOnboardingWorkflow,
   triggerOnboardingAutomation,
 } from '@/lib/automation/client';
 import type { ProvisioningJobLog } from '@/lib/automation/client';
@@ -69,6 +71,7 @@ const deriveWorkEmail = (firstName: string, lastName: string): string => {
 
 const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const invalidateEmployees = useInvalidateEmployees();
 
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -105,6 +108,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
   });
 
   const [createdEmployeeEmail, setCreatedEmployeeEmail] = useState<string>('');
+  const [createdEmployeeId, setCreatedEmployeeId] = useState<string>('');
   const [provisioningLogs, setProvisioningLogs] = useState<ProvisioningJobLog[]>([]);
   const [provisioningJobStatus, setProvisioningJobStatus] = useState<'Completed' | 'Failed' | null>(null);
 
@@ -141,6 +145,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     setErrorMessage(null);
     setErrors({ firstName: false, lastName: false, role: false, department: false });
     setCreatedEmployeeEmail('');
+    setCreatedEmployeeId('');
     setProvisioningLogs([]);
     setProvisioningJobStatus(null);
   };
@@ -169,9 +174,14 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
     }
   }, [open, startOnboarding]);
 
-  const closeAndReset = () => {
+  const closeAndReset = (navigateToOnboarding = false) => {
+    const targetEmployeeId = createdEmployeeId;
     onOpenChange(false);
     resetDialogState();
+
+    if (navigateToOnboarding && targetEmployeeId) {
+      navigate(`/employees/${targetEmployeeId}?tab=onboarding`);
+    }
   };
 
   const validateStepOne = (): boolean => {
@@ -304,8 +314,22 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
 
       const resolvedEmail = createdEmployee.email || deriveWorkEmail(firstName, lastName);
       setCreatedEmployeeEmail(resolvedEmail);
+      setCreatedEmployeeId(createdEmployee.id);
 
       if (!startOnboarding) {
+        try {
+          await initializeOnboardingWorkflow({
+            employeeId: createdEmployee.id,
+          });
+        } catch (initError) {
+          const initMessage = initError instanceof Error ? initError.message : 'Failed to initialize onboarding workflow.';
+          toast({
+            title: 'Onboarding initialization failed',
+            description: `${firstName} ${lastName} was created, but onboarding setup failed: ${initMessage}`,
+            variant: 'destructive',
+          });
+        }
+
         setCreationPhase('finalizing');
         setProvisioningLogs([]);
         setProvisioningJobStatus(null);
@@ -341,6 +365,25 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
         selectedMailboxes,
         selectedGroupIds,
       });
+
+      try {
+        await initializeOnboardingWorkflow({
+          employeeId: createdEmployee.id,
+          provisioningStatus:
+            automationResult.status === 'Completed'
+              ? 'completed'
+              : automationResult.status === 'Failed'
+                ? 'failed'
+                : 'running',
+        });
+      } catch (initError) {
+        const initMessage = initError instanceof Error ? initError.message : 'Failed to initialize onboarding workflow.';
+        toast({
+          title: 'Onboarding initialization failed',
+          description: `${firstName} ${lastName} account was provisioned, but onboarding setup failed: ${initMessage}`,
+          variant: 'destructive',
+        });
+      }
 
       setCreationPhase('finalizing');
 
@@ -909,7 +952,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
                     Microsoft 365 onboarding was not started for this employee. You can start provisioning later from the provisioning flow.
                   </p>
 
-                  <Button className="w-full" onClick={closeAndReset}>Done</Button>
+                  <Button className="w-full" onClick={() => closeAndReset(true)}>Done</Button>
                 </div>
               );
             }
@@ -1096,7 +1139,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
                         <a href="/provisioning" className="font-semibold underline">Provisioning page</a> for detailed logs.</>}
                 </p>
 
-                <Button className="w-full" onClick={closeAndReset}>Done</Button>
+                <Button className="w-full" onClick={() => closeAndReset(true)}>Done</Button>
               </div>
             );
           })()
@@ -1143,7 +1186,7 @@ const AddEmployeeDialog = ({ open, onOpenChange }: AddEmployeeDialogProps) => {
               {!isCreating && (
                 <>
                   <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
-                    <Button variant="outline" onClick={closeAndReset}>
+                    <Button variant="outline" onClick={() => closeAndReset()}>
                       {t('form.cancel')}
                     </Button>
 

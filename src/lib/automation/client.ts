@@ -8,9 +8,13 @@ import type {
   CreateEmployeeInput,
   CreateEmployeeResult,
   GraphResourcesResult,
+  InitializeOnboardingInput,
+  InitializeOnboardingResult,
   RetryAutomationResult,
   TriggerAutomationInput,
   TriggerAutomationResult,
+  UpdateOnboardingTaskInput,
+  UpdateOnboardingTaskResult,
 } from '@/lib/automation/types';
 
 type EdgeFunctionErrorPayload = {
@@ -20,6 +24,27 @@ type EdgeFunctionErrorPayload = {
   message?: string;
 };
 
+const invalidateSessionAndThrow = async (message: string): Promise<never> => {
+  if (supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore sign-out cleanup failures and continue with the actionable error.
+    }
+  }
+
+  throw new Error(message);
+};
+
+const validateAccessToken = async (accessToken: string): Promise<boolean> => {
+  if (!supabase) {
+    return false;
+  }
+
+  const { data, error } = await supabase.auth.getUser(accessToken);
+  return !error && Boolean(data.user);
+};
+
 const getFreshAccessToken = async (): Promise<string> => {
   if (!supabase) {
     throw new Error('Supabase client is unavailable.');
@@ -27,12 +52,21 @@ const getFreshAccessToken = async (): Promise<string> => {
 
   const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) {
-    throw new Error(refreshError.message || 'Failed to refresh session. Please sign in again.');
+    await invalidateSessionAndThrow(
+      refreshError.message || 'Failed to refresh session. Please sign in again.',
+    );
   }
 
   const refreshedToken = refreshedData.session?.access_token;
   if (!refreshedToken) {
-    throw new Error('You are not authenticated. Please sign in again and retry.');
+    await invalidateSessionAndThrow('You are not authenticated. Please sign in again and retry.');
+  }
+
+  const isTokenValid = await validateAccessToken(refreshedToken);
+  if (!isTokenValid) {
+    await invalidateSessionAndThrow(
+      'Your Supabase session is invalid for this project. Please sign in again.',
+    );
   }
 
   return refreshedToken;
@@ -50,7 +84,10 @@ const getAccessTokenOrRefresh = async (): Promise<string> => {
 
   const accessToken = sessionData.session?.access_token;
   if (accessToken) {
-    return accessToken;
+    const isTokenValid = await validateAccessToken(accessToken);
+    if (isTokenValid) {
+      return accessToken;
+    }
   }
 
   return getFreshAccessToken();
@@ -83,7 +120,24 @@ const invokeAuthenticatedFunction = async <TResult>(
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error || payload?.message || `${functionName} failed (HTTP ${response.status}).`);
+    const message = payload?.error || payload?.message || '';
+    const normalized = message.toLowerCase();
+
+    if (
+      response.status === 401
+      && (
+        normalized.includes('invalid jwt')
+        || normalized.includes('unauthorized')
+        || normalized.includes('authentication required')
+        || !normalized
+      )
+    ) {
+      await invalidateSessionAndThrow(
+        `Unauthorized while calling ${functionName}. Please sign in again to refresh your Supabase session.`,
+      );
+    }
+
+    throw new Error(message || `${functionName} failed (HTTP ${response.status}).`);
   }
 
   return (payload || {}) as TResult;
@@ -244,6 +298,47 @@ export const retryProvisioningAutomation = async (
 
   if (!data?.jobId || !data?.status) {
     throw new Error('Provisioning retry returned an invalid response.');
+  }
+
+  return data;
+};
+
+export const initializeOnboardingWorkflow = async (
+  input: InitializeOnboardingInput,
+): Promise<InitializeOnboardingResult> => {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase is not configured in this environment.');
+  }
+
+  const data = await invokeAuthenticatedFunction<InitializeOnboardingResult>('onboarding-init', {
+    employeeId: input.employeeId,
+    provisioningStatus: input.provisioningStatus,
+  });
+
+  if (!data?.workflowId || !data?.status) {
+    throw new Error('Onboarding initialization returned an invalid response.');
+  }
+
+  return data;
+};
+
+export const updateOnboardingTask = async (
+  input: UpdateOnboardingTaskInput,
+): Promise<UpdateOnboardingTaskResult> => {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase is not configured in this environment.');
+  }
+
+  const data = await invokeAuthenticatedFunction<UpdateOnboardingTaskResult>('onboarding-task-update', {
+    employeeId: input.employeeId,
+    taskTemplateId: input.taskTemplateId,
+    status: input.status,
+    toggleCompleted: input.toggleCompleted,
+    note: input.note,
+  });
+
+  if (!data?.workflowId || !data?.workflowStatus || !data?.task) {
+    throw new Error('Onboarding task update returned an invalid response.');
   }
 
   return data;

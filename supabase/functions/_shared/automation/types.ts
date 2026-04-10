@@ -6,7 +6,13 @@ export interface EmployeeRow {
   first_name: string;
   last_name: string;
   email: string | null;
-  department: 'Sales' | 'Customs & Compliance' | 'Transport';
+  department:
+    | 'Sales'
+    | 'Customs & Compliance'
+    | 'Transport'
+    | 'Operations'
+    | 'Planning'
+    | 'Logistics';
   status: 'Active' | 'Inactive' | 'Onboarding';
 }
 

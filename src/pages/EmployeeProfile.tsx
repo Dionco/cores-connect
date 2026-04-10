@@ -1,19 +1,26 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Clock, Zap } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import OnboardingTab from '@/components/onboarding/OnboardingTab';
 
 const EmployeeProfile = () => {
   const { id } = useParams();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { employees } = useEmployees();
   const emp = employees.find(e => e.id === id);
+  const requestedTab = searchParams.get('tab');
+  const defaultTab =
+    requestedTab === 'onboarding' || requestedTab === 'provisioning' || requestedTab === 'details'
+      ? requestedTab
+      : 'details';
 
   if (!emp) {
     return (
@@ -58,7 +65,7 @@ const EmployeeProfile = () => {
         {/* Right column with tabs */}
         <Card className="border-0 shadow-sm lg:col-span-2">
           <CardContent className="p-6">
-            <Tabs defaultValue="details">
+            <Tabs defaultValue={defaultTab}>
               <TabsList className="mb-4">
                 <TabsTrigger value="details">{t('profile.details')}</TabsTrigger>
                 <TabsTrigger value="onboarding">{t('profile.onboarding')}</TabsTrigger>
@@ -86,22 +93,7 @@ const EmployeeProfile = () => {
               </TabsContent>
 
               <TabsContent value="onboarding">
-                <div className="space-y-2">
-                  {emp.onboardingTasks.map((task) => (
-                    <div key={task.id} className="flex items-center gap-3 rounded-lg border p-3">
-                      {task.completed ? (
-                        <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
-                      ) : (
-                        <div className="h-[18px] w-[18px] rounded-full border-2 border-muted-foreground/30 shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">{t(task.key)}</p>
-                        {task.completedAt && <p className="text-xs text-muted-foreground">{task.completedAt}</p>}
-                      </div>
-                      {task.automated && <Zap size={14} className="text-cores-orange shrink-0" />}
-                    </div>
-                  ))}
-                </div>
+                <OnboardingTab employee={emp} />
               </TabsContent>
 
               <TabsContent value="provisioning">

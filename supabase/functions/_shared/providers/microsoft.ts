@@ -112,6 +112,9 @@ export const getConfig = (): MicrosoftGraphConfig => {
         Sales: Deno.env.get('MS_EXO_SHARED_MAILBOX_SALES') || `sales@${domain}`,
         'Customs & Compliance': Deno.env.get('MS_EXO_SHARED_MAILBOX_CUSTOMS') || `customs@${domain}`,
         Transport: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRANSPORT') || `transport@${domain}`,
+        Operations: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRANSPORT') || `transport@${domain}`,
+        Planning: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRANSPORT') || `transport@${domain}`,
+        Logistics: Deno.env.get('MS_EXO_SHARED_MAILBOX_TRANSPORT') || `transport@${domain}`,
       },
     },
   };
