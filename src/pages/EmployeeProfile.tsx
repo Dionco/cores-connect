@@ -36,9 +36,9 @@ const EmployeeProfile = () => {
         <ArrowLeft size={16} /> {t('profile.back')}
       </Button>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         {/* Left column */}
-        <Card className="border-0 shadow-sm lg:col-span-1">
+        <Card className="self-start border-0 shadow-sm lg:col-span-1">
           <CardContent className="flex flex-col items-center p-6 text-center">
             <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/20 text-2xl font-bold text-foreground">
               {emp.firstName[0]}{emp.lastName[0]}
