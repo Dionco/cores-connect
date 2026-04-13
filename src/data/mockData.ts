@@ -1,4 +1,5 @@
 import type { AppNotification } from '@/types/notifications';
+import type { OnboardingTaskStatus } from '@/data/onboardingTypes';
 
 export type Department =
   | 'Sales'
@@ -38,6 +39,8 @@ export interface OnboardingTask {
   automated: boolean;
   completedAt?: string;
   departmentSpecific?: Department;
+  status?: OnboardingTaskStatus;
+  phaseId?: string;
 }
 
 export interface ProvisioningItem {

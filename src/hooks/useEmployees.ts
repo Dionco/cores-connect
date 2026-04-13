@@ -124,6 +124,7 @@ const fetchEmployees = async (): Promise<Employee[]> => {
         automated: task.automated,
         completedAt: task.completed_at || undefined,
         departmentSpecific: (task.department_specific || undefined) as Department | undefined,
+        status: task.completed ? 'completed' : 'pending',
       });
       legacyTasksByEmployee.set(task.employee_id, tasks);
     });
@@ -182,6 +183,8 @@ const fetchEmployees = async (): Promise<Employee[]> => {
           completed: row.status === 'completed',
           automated: Boolean(template?.automatable),
           completedAt: row.completed_at || undefined,
+          status: row.status,
+          phaseId: template?.phaseId,
         });
 
         workflowTasksByEmployee.set(employeeId, tasks);

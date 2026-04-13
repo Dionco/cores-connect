@@ -85,6 +85,86 @@ const baseTranslations: Record<string, Record<Language, string>> = {
   'profile.details': { en: 'Details', nl: 'Details' },
   'profile.onboarding': { en: 'Onboarding', nl: 'Onboarding' },
   'profile.provisioning': { en: 'Provisioning', nl: 'Provisioning' },
+  'profile.documents': { en: 'Documents', nl: 'Documenten' },
+  'profile.credentials': { en: 'App Access', nl: 'App-toegang' },
+
+  // App credentials
+  'credentials.add': { en: 'Add app login', nl: 'App-login toevoegen' },
+  'credentials.addTitle': { en: 'Add app login', nl: 'App-login toevoegen' },
+  'credentials.editTitle': { en: 'Edit app login', nl: 'App-login bewerken' },
+  'credentials.appName': { en: 'App name', nl: 'App-naam' },
+  'credentials.appNameRequired': { en: 'App name is required', nl: 'App-naam is verplicht' },
+  'credentials.loginUrl': { en: 'Login URL', nl: 'Login-URL' },
+  'credentials.username': { en: 'Username / email', nl: 'Gebruikersnaam / e-mail' },
+  'credentials.password': { en: 'Password', nl: 'Wachtwoord' },
+  'credentials.passwordLeaveBlank': { en: '(leave blank to keep current)', nl: '(leeg laten om te behouden)' },
+  'credentials.notes': { en: 'Notes', nl: 'Notities' },
+  'credentials.save': { en: 'Save', nl: 'Opslaan' },
+  'credentials.cancel': { en: 'Cancel', nl: 'Annuleren' },
+  'credentials.created': { en: 'App login added', nl: 'App-login toegevoegd' },
+  'credentials.updated': { en: 'App login updated', nl: 'App-login bijgewerkt' },
+  'credentials.deleted': { en: 'App login deleted', nl: 'App-login verwijderd' },
+  'credentials.saveFailed': { en: 'Failed to save', nl: 'Opslaan mislukt' },
+  'credentials.deleteFailed': { en: 'Failed to delete', nl: 'Verwijderen mislukt' },
+  'credentials.revealFailed': { en: 'Failed to reveal password', nl: 'Wachtwoord ophalen mislukt' },
+  'credentials.loading': { en: 'Loading…', nl: 'Laden…' },
+  'credentials.empty': { en: 'No app logins stored yet.', nl: 'Nog geen app-logins opgeslagen.' },
+  'credentials.passwordSet': { en: 'password saved', nl: 'wachtwoord opgeslagen' },
+  'credentials.noPassword': { en: 'no password', nl: 'geen wachtwoord' },
+  'credentials.noUsername': { en: 'no username', nl: 'geen gebruikersnaam' },
+  'credentials.passwordCopied': { en: 'Password copied to clipboard', nl: 'Wachtwoord gekopieerd' },
+  'credentials.usernameCopied': { en: 'Username copied', nl: 'Gebruikersnaam gekopieerd' },
+  'credentials.clipboardWillClear': { en: 'Clipboard will be cleared in 20s.', nl: 'Klembord wordt na 20s gewist.' },
+  'credentials.clipboardCleared': { en: 'Clipboard cleared', nl: 'Klembord gewist' },
+  'credentials.deleteConfirmTitle': { en: 'Delete app login?', nl: 'App-login verwijderen?' },
+  'credentials.deleteConfirmDescription': { en: 'This permanently deletes:', nl: 'Dit verwijdert definitief:' },
+  'credentials.delete': { en: 'Delete', nl: 'Verwijderen' },
+  'credentials.edit': { en: 'Edit', nl: 'Bewerken' },
+  'credentials.open': { en: 'Open', nl: 'Openen' },
+  'credentials.copyUsername': { en: 'Copy username', nl: 'Gebruikersnaam kopiëren' },
+  'credentials.reveal': { en: 'Show password', nl: 'Wachtwoord tonen' },
+  'credentials.hide': { en: 'Hide password', nl: 'Wachtwoord verbergen' },
+  'credentials.copyPassword': { en: 'Copy password', nl: 'Wachtwoord kopiëren' },
+  'credentials.securityNotice': {
+    en: 'Passwords are encrypted at rest. Every reveal is logged.',
+    nl: 'Wachtwoorden zijn versleuteld opgeslagen. Elk inkijken wordt gelogd.',
+  },
+
+  // Documents tab
+  'documents.category': { en: 'Category', nl: 'Categorie' },
+  'documents.category.onboarding': { en: 'Onboarding', nl: 'Onboarding' },
+  'documents.category.signature': { en: 'Email signature', nl: 'E-mailhandtekening' },
+  'documents.category.contract': { en: 'Contract', nl: 'Contract' },
+  'documents.category.id': { en: 'ID document', nl: 'Legitimatie' },
+  'documents.category.other': { en: 'Other', nl: 'Overig' },
+  'documents.upload': { en: 'Upload files', nl: 'Bestanden uploaden' },
+  'documents.dropzone': { en: 'Drag & drop files here, or use the upload button. Max 25 MB.', nl: 'Sleep bestanden hierheen, of gebruik de upload-knop. Max 25 MB.' },
+  'documents.loading': { en: 'Loading documents…', nl: 'Documenten laden…' },
+  'documents.emptyCategory': { en: 'No documents yet.', nl: 'Nog geen documenten.' },
+  'documents.uploadSuccess': { en: 'Document uploaded', nl: 'Document geüpload' },
+  'documents.uploadFailed': { en: 'Upload failed', nl: 'Upload mislukt' },
+  'documents.downloadFailed': { en: 'Download failed', nl: 'Download mislukt' },
+  'documents.deleteSuccess': { en: 'Document deleted', nl: 'Document verwijderd' },
+  'documents.deleteFailed': { en: 'Delete failed', nl: 'Verwijderen mislukt' },
+  'documents.deleteConfirmTitle': { en: 'Delete document?', nl: 'Document verwijderen?' },
+  'documents.deleteConfirmDescription': { en: 'This permanently deletes:', nl: 'Dit verwijdert definitief:' },
+  'documents.delete': { en: 'Delete', nl: 'Verwijderen' },
+  'documents.cancel': { en: 'Cancel', nl: 'Annuleren' },
+  'documents.generateSignature': { en: 'Generate signature', nl: 'Handtekening maken' },
+  'documents.signatureTitle': { en: 'Generate email signature', nl: 'E-mailhandtekening genereren' },
+  'documents.signatureLocale': { en: 'Language', nl: 'Taal' },
+  'documents.signatureFullName': { en: 'Full name', nl: 'Volledige naam' },
+  'documents.signatureRole': { en: 'Role / title', nl: 'Functie' },
+  'documents.signaturePhone': { en: 'Phone', nl: 'Telefoon' },
+  'documents.signatureAddress': { en: 'Address line', nl: 'Adresregel' },
+  'documents.signaturePresence': { en: 'Presence line (optional)', nl: 'Aanwezigheid (optioneel)' },
+  'documents.signaturePresencePlaceholder': { en: 'Present on Mon, Tue, Wed, Thu, Fri', nl: 'Aanwezig op ma, di, wo, do, vr' },
+  'documents.signatureCopy': { en: 'Copy HTML', nl: 'HTML kopiëren' },
+  'documents.signatureDownload': { en: 'Download .htm', nl: '.htm downloaden' },
+  'documents.signatureSave': { en: 'Save to employee', nl: 'Opslaan bij medewerker' },
+  'documents.signatureCopied': { en: 'Signature HTML copied', nl: 'HTML gekopieerd' },
+  'documents.signatureSaved': { en: 'Signature saved', nl: 'Handtekening opgeslagen' },
+  'documents.signatureSaveFailed': { en: 'Failed to save signature', nl: 'Opslaan mislukt' },
   'profile.email': { en: 'Email', nl: 'E-mail' },
   'profile.personalPhone': { en: 'Personal Phone', nl: 'Persoonlijk Telefoon' },
   'profile.contractType': { en: 'Contract Type', nl: 'Contracttype' },
@@ -129,6 +209,21 @@ const baseTranslations: Record<string, Record<Language, string>> = {
   'onboarding.retryCount': { en: 'Retry count', nl: 'Aantal retries' },
   'onboarding.noActive': { en: 'No active onboardings', nl: 'Geen actieve onboardings' },
   'onboarding.noActiveDesc': { en: 'When new employees are added, their onboarding will appear here.', nl: 'Wanneer nieuwe medewerkers worden toegevoegd, verschijnt hun onboarding hier.' },
+  'onboarding.searchPlaceholder': { en: 'Search by name, department, or role...', nl: 'Zoek op naam, afdeling of functie...' },
+  'onboarding.emptyFiltered': { en: 'Try adjusting your search or filters.', nl: 'Probeer uw zoekopdracht of filters aan te passen.' },
+  'onboarding.filter.all': { en: 'All', nl: 'Alle' },
+  'onboarding.filter.attention': { en: 'Needs Attention', nl: 'Aandacht Nodig' },
+  'onboarding.filter.waiting': { en: 'Waiting', nl: 'Wachtend' },
+  'onboarding.filter.new': { en: 'Not Started', nl: 'Niet Gestart' },
+  'onboarding.summary.active': { en: 'Active', nl: 'Actief' },
+  'onboarding.summary.inProgress': { en: 'In Progress', nl: 'In Uitvoering' },
+  'onboarding.summary.waiting': { en: 'Waiting', nl: 'Wachtend' },
+  'onboarding.summary.needsAttention': { en: 'Needs Attention', nl: 'Aandacht Nodig' },
+  'onboarding.summary.employees': { en: 'employees onboarding', nl: 'medewerkers in onboarding' },
+  'onboarding.summary.running': { en: 'workflows running', nl: 'lopende workflows' },
+  'onboarding.summary.external': { en: 'waiting externally', nl: 'extern in afwachting' },
+  'onboarding.summary.blockers': { en: 'blockers detected', nl: 'blokkades gevonden' },
+  'onboarding.viewOnboarding': { en: 'View onboarding', nl: 'Bekijk onboarding' },
 
   // Onboarding tasks
   'task.m365Created': { en: 'M365 account created', nl: 'M365 account aangemaakt' },
@@ -255,12 +350,28 @@ const baseTranslations: Record<string, Record<Language, string>> = {
   'notifications.unreadAria': { en: 'Open notifications, {count} unread', nl: 'Meldingen openen, {count} ongelezen' },
 };
 
+const dutchOnlyOnboardingKeys = new Set([
+  'onboarding.email.horizon3.subjectPrefix',
+  'onboarding.email.horizon3.bodyTemplate',
+]);
+
 const onboardingTranslationMap: Record<string, Record<Language, string>> = Object.keys(
   onboardingTranslations.en,
 ).reduce((acc, key) => {
+  const englishValue = onboardingTranslations.en[key] || key;
+  const dutchValue = onboardingTranslations.nl[key] || englishValue;
+
+  if (dutchOnlyOnboardingKeys.has(key)) {
+    acc[key] = {
+      en: dutchValue,
+      nl: dutchValue,
+    };
+    return acc;
+  }
+
   acc[key] = {
-    en: onboardingTranslations.en[key] || key,
-    nl: onboardingTranslations.nl[key] || onboardingTranslations.en[key] || key,
+    en: englishValue,
+    nl: dutchValue,
   };
   return acc;
 }, {} as Record<string, Record<Language, string>>);

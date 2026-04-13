@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import OnboardingTab from '@/components/onboarding/OnboardingTab';
+import DocumentsTab from '@/components/documents/DocumentsTab';
+import AppCredentialsTab from '@/components/credentials/AppCredentialsTab';
 
 const EmployeeProfile = () => {
   const { id } = useParams();
@@ -18,7 +20,7 @@ const EmployeeProfile = () => {
   const emp = employees.find(e => e.id === id);
   const requestedTab = searchParams.get('tab');
   const defaultTab =
-    requestedTab === 'onboarding' || requestedTab === 'provisioning' || requestedTab === 'details'
+    requestedTab === 'onboarding' || requestedTab === 'provisioning' || requestedTab === 'details' || requestedTab === 'documents' || requestedTab === 'credentials'
       ? requestedTab
       : 'details';
 
@@ -70,6 +72,8 @@ const EmployeeProfile = () => {
                 <TabsTrigger value="details">{t('profile.details')}</TabsTrigger>
                 <TabsTrigger value="onboarding">{t('profile.onboarding')}</TabsTrigger>
                 <TabsTrigger value="provisioning">{t('profile.provisioning')}</TabsTrigger>
+                <TabsTrigger value="documents">{t('profile.documents')}</TabsTrigger>
+                <TabsTrigger value="credentials">{t('profile.credentials')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="details">
@@ -131,6 +135,14 @@ const EmployeeProfile = () => {
                     ))}
                   </div>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="documents">
+                <DocumentsTab employee={emp} />
+              </TabsContent>
+
+              <TabsContent value="credentials">
+                <AppCredentialsTab employee={emp} />
               </TabsContent>
             </Tabs>
           </CardContent>
