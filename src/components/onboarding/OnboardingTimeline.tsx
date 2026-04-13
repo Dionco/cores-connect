@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { OnboardingPhaseStatus, OnboardingTaskStatus, PhaseComputed } from '@/data/onboardingTypes';
-import { cn } from '@/lib/utils';
+import type { OnboardingTaskStatus, PhaseComputed } from '@/data/onboardingTypes';
 import type { ExternalRequestEmailContext } from './ExternalRequestEmailDialog';
 import PhaseSection from './PhaseSection';
 
@@ -18,14 +17,6 @@ interface OnboardingTimelineProps {
   requestEmailContext: ExternalRequestEmailContext;
 }
 
-const timelineDotStyles: Record<OnboardingPhaseStatus, string> = {
-  locked: 'border-slate-300 bg-slate-200',
-  available: 'border-blue-300 bg-blue-200',
-  in_progress: 'border-indigo-300 bg-indigo-200',
-  waiting: 'border-amber-300 bg-amber-200',
-  completed: 'border-emerald-300 bg-emerald-200',
-};
-
 export const OnboardingTimeline = ({
   phases,
   disabled = false,
@@ -40,13 +31,31 @@ export const OnboardingTimeline = ({
 
   useEffect(() => {
     setOpenPhases((prev) => {
-      const next = { ...prev };
+      const next: Record<string, boolean> = {};
       let changed = false;
 
       for (const phase of phases) {
-        if (next[phase.phase.id] === undefined) {
-          next[phase.phase.id] = phase.status !== 'locked' && phase.status !== 'completed';
+        const isLockedOrDone = phase.status === 'locked' || phase.status === 'completed';
+        const isAutoExpanded = phase.status === 'in_progress' || phase.status === 'waiting';
+        const isDefaultExpanded = phase.status === 'available';
+
+        const nextOpen = isLockedOrDone
+          ? false
+          : isAutoExpanded
+            ? true
+            : prev[phase.phase.id] ?? isDefaultExpanded;
+
+        next[phase.phase.id] = nextOpen;
+
+        if (prev[phase.phase.id] !== nextOpen) {
           changed = true;
+        }
+      }
+
+      for (const previousPhaseId of Object.keys(prev)) {
+        if (!(previousPhaseId in next)) {
+          changed = true;
+          break;
         }
       }
 
@@ -59,20 +68,9 @@ export const OnboardingTimeline = ({
   };
 
   return (
-    <div className="space-y-3">
-      {phases.map((phase, index) => (
-        <div key={phase.phase.id} className="relative pl-6">
-          {index < phases.length - 1 && (
-            <div className="absolute left-[8px] top-10 h-[calc(100%-0.25rem)] w-px bg-border" />
-          )}
-
-          <span
-            className={cn(
-              'absolute left-[3px] top-5 h-3 w-3 rounded-full border-2',
-              timelineDotStyles[phase.status],
-            )}
-          />
-
+    <div className="space-y-1">
+      {phases.map((phase) => (
+        <div key={phase.phase.id}>
           <PhaseSection
             phaseComputed={phase}
             isOpen={openPhases[phase.phase.id] ?? false}

@@ -38,11 +38,25 @@ export const PhaseSection = ({
   return (
     <Collapsible
       open={isOpen}
-      onOpenChange={(open) => onOpenChange(phaseComputed.phase.id, open)}
+      onOpenChange={(open) => {
+        if (isLocked) {
+          return;
+        }
+        onOpenChange(phaseComputed.phase.id, open);
+      }}
     >
-      <div className={cn('rounded-xl border bg-card p-4', isLocked && 'border-dashed')}>
+      <div>
         <CollapsibleTrigger asChild>
-          <button type="button" className="w-full text-left">
+          <button
+            type="button"
+            className={cn(
+              'w-full rounded-lg px-3 py-3 text-left transition-colors',
+              !isLocked && 'hover:bg-muted/40',
+              isOpen && !isLocked && 'bg-card shadow-sm ring-1 ring-border/70',
+              isLocked && 'cursor-not-allowed',
+            )}
+            disabled={isLocked}
+          >
             <PhaseHeader
               phase={phaseComputed.phase}
               status={phaseComputed.status}
@@ -53,21 +67,23 @@ export const PhaseSection = ({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="mt-3 space-y-2 border-t pt-3">
-            {phaseComputed.tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                locked={isLocked}
-                disabled={disabled}
-                provisioningJob={provisioningJob}
-                onToggleTask={onToggleTask}
-                onSetTaskStatus={onSetTaskStatus}
-                onTriggerProvisioning={onTriggerProvisioning}
-                onRetryProvisioning={onRetryProvisioning}
-                requestEmailContext={requestEmailContext}
-              />
-            ))}
+          <div className="ml-6 border-l border-border/70 pb-2 pl-3 pr-1">
+            <div className="space-y-0.5 pt-1">
+              {phaseComputed.tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  locked={isLocked}
+                  disabled={disabled}
+                  provisioningJob={provisioningJob}
+                  onToggleTask={onToggleTask}
+                  onSetTaskStatus={onSetTaskStatus}
+                  onTriggerProvisioning={onTriggerProvisioning}
+                  onRetryProvisioning={onRetryProvisioning}
+                  requestEmailContext={requestEmailContext}
+                />
+              ))}
+            </div>
           </div>
         </CollapsibleContent>
       </div>

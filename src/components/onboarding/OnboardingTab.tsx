@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { ArrowRight, Hourglass } from 'lucide-react';
 import type { Employee, ProvisioningStatus } from '@/data/mockData';
-import type { OnboardingPhaseStatus } from '@/data/onboardingTypes';
+import type { OnboardingPhaseStatus, PhaseComputed } from '@/data/onboardingTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -9,7 +10,6 @@ import { createAppNotification } from '@/lib/notifications';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import OnboardingTimeline from './OnboardingTimeline';
@@ -30,6 +30,57 @@ const workflowStatusStyles = {
   in_progress: 'border-indigo-200 bg-indigo-50 text-indigo-700',
   completed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 } as const;
+
+const phaseSegmentStyles: Record<OnboardingPhaseStatus, string> = {
+  locked: 'bg-slate-300/80',
+  available: 'bg-blue-400/80',
+  in_progress: 'bg-indigo-500',
+  waiting: 'bg-amber-500',
+  completed: 'bg-emerald-500',
+};
+
+type NextAction = {
+  phase: PhaseComputed;
+  task: PhaseComputed['tasks'][number];
+  isWaiting: boolean;
+};
+
+function getNextAction(phases: PhaseComputed[]): NextAction | null {
+  for (const phase of phases) {
+    if (phase.status === 'locked') {
+      continue;
+    }
+
+    const actionableTask = phase.tasks.find(
+      (task) => task.instance.status === 'pending' || task.instance.status === 'in_progress',
+    );
+
+    if (actionableTask) {
+      return {
+        phase,
+        task: actionableTask,
+        isWaiting: false,
+      };
+    }
+  }
+
+  for (const phase of phases) {
+    if (phase.status === 'locked') {
+      continue;
+    }
+
+    const waitingTask = phase.tasks.find((task) => task.instance.status === 'waiting_external');
+    if (waitingTask) {
+      return {
+        phase,
+        task: waitingTask,
+        isWaiting: true,
+      };
+    }
+  }
+
+  return null;
+}
 
 function mapProvisioningStatus(status: ProvisioningStatus): 'completed' | 'running' | 'failed' | undefined {
   if (status === 'Provisioned') return 'completed';
@@ -110,6 +161,8 @@ export const OnboardingTab = ({ employee }: OnboardingTabProps) => {
 
     return Math.max(0, dayCount);
   }, [completionDate, employee.startDate, workflow?.status]);
+
+  const nextAction = useMemo(() => getNextAction(phases), [phases]);
 
   useEffect(() => {
     if (!workflow || phases.length === 0) {
@@ -306,9 +359,59 @@ export const OnboardingTab = ({ employee }: OnboardingTabProps) => {
             </Badge>
           </div>
 
-          <Progress value={overallProgress.percentage} className="h-2" />
+          <div className="flex h-2 gap-1">
+            {phases.map((phase) => (
+              <span
+                key={phase.phase.id}
+                className={cn('flex-1 rounded-full', phaseSegmentStyles[phase.status])}
+              />
+            ))}
+          </div>
         </CardContent>
       </Card>
+
+      {nextAction && (
+        <Card
+          className={cn(
+            'border-0 shadow-sm',
+            nextAction.isWaiting
+              ? 'bg-amber-50/70 text-amber-900'
+              : 'bg-blue-50/70 text-blue-900',
+          )}
+        >
+          <CardContent className="flex items-start gap-3 p-3">
+            <span
+              className={cn(
+                'mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-md',
+                nextAction.isWaiting
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-blue-100 text-blue-700',
+              )}
+            >
+              {nextAction.isWaiting ? <Hourglass size={16} /> : <ArrowRight size={16} />}
+            </span>
+
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  'text-[11px] font-semibold uppercase tracking-wide',
+                  nextAction.isWaiting ? 'text-amber-700' : 'text-blue-700',
+                )}
+              >
+                {nextAction.isWaiting
+                  ? t('onboarding.next.waitingOn')
+                  : t('onboarding.next.upNext')}
+              </p>
+              <p className="mt-0.5 text-sm font-semibold text-foreground">
+                {t(nextAction.task.title)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t(nextAction.phase.phase.title)} • {nextAction.phase.progress.completed}/{nextAction.phase.progress.total}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <OnboardingTimeline
         phases={phases}
